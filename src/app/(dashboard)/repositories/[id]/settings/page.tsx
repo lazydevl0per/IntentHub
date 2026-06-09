@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AgentSystemPromptForm } from "@/components/agent-system-prompt-form";
 import { DisconnectRepositoryButton } from "@/components/disconnect-repo-button";
+import { ReindexRepositoryButton } from "@/components/reindex-repo-button";
 import { SyncRepositoryButton } from "@/components/sync-repo-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +60,26 @@ export default async function RepositorySettingsPage({
                 : "never"}
             </p>
             <SyncRepositoryButton repositoryId={repository.id} demoMode={demoMode} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Search Index</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-zinc-500">
+            <p>
+              Rebuild vector and full-text indexes for objectives, plans,
+              decisions, agent runs, evaluations, and commits.
+            </p>
+            {member.role === "OWNER" ? (
+              <ReindexRepositoryButton
+                repositoryId={repository.id}
+                demoMode={demoMode}
+              />
+            ) : (
+              <p>Only repository owners can trigger a full reindex.</p>
+            )}
           </CardContent>
         </Card>
 
