@@ -51,6 +51,58 @@ export async function fullTextSearch(
       WHERE o."repositoryId" = ${repositoryId}
         AND to_tsvector('english', coalesce(d.rationale, ''))
             @@ plainto_tsquery('english', ${query})
+
+      UNION ALL
+
+      SELECT 'AGENT_RUN' as entity_type, ar.id as entity_id, ar."agentName" as title,
+        coalesce(ar.prompt, '') || ' ' || coalesce(ar.output, '') as content,
+        ts_rank(
+          to_tsvector('english', coalesce(ar."agentName", '') || ' ' || coalesce(ar.prompt, '') || ' ' || coalesce(ar.output, '')),
+          plainto_tsquery('english', ${query})
+        ) as rank
+      FROM "AgentRun" ar
+      JOIN "Objective" o ON o.id = ar."objectiveId"
+      WHERE o."repositoryId" = ${repositoryId}
+        AND to_tsvector('english', coalesce(ar."agentName", '') || ' ' || coalesce(ar.prompt, '') || ' ' || coalesce(ar.output, ''))
+            @@ plainto_tsquery('english', ${query})
+
+      UNION ALL
+
+      SELECT 'EVALUATION' as entity_type, e.id as entity_id, e.type::text as title, e.summary as content,
+        ts_rank(
+          to_tsvector('english', coalesce(e.summary, '')),
+          plainto_tsquery('english', ${query})
+        ) as rank
+      FROM "Evaluation" e
+      JOIN "Objective" o ON o.id = e."objectiveId"
+      WHERE o."repositoryId" = ${repositoryId}
+        AND to_tsvector('english', coalesce(e.summary, ''))
+            @@ plainto_tsquery('english', ${query})
+
+      UNION ALL
+
+      SELECT 'COMMIT' as entity_type, c.id as entity_id, left(c.sha, 7) as title, c.message as content,
+        ts_rank(
+          to_tsvector('english', coalesce(c.message, '') || ' ' || coalesce(c.author, '')),
+          plainto_tsquery('english', ${query})
+        ) as rank
+      FROM "GitCommit" c
+      WHERE c."repositoryId" = ${repositoryId}
+        AND to_tsvector('english', coalesce(c.message, '') || ' ' || coalesce(c.author, ''))
+            @@ plainto_tsquery('english', ${query})
+
+      UNION ALL
+
+      SELECT 'COMMIT' as entity_type, ci.id as entity_id, left(ci.sha, 7) as title,
+        coalesce(ci.intent, '') || ' ' || coalesce(ci."archImpact", '') || ' ' || coalesce(ci."perfImpact", '') as content,
+        ts_rank(
+          to_tsvector('english', coalesce(ci.intent, '') || ' ' || coalesce(ci."archImpact", '') || ' ' || coalesce(ci."perfImpact", '')),
+          plainto_tsquery('english', ${query})
+        ) as rank
+      FROM "CommitInsight" ci
+      WHERE ci."repositoryId" = ${repositoryId}
+        AND to_tsvector('english', coalesce(ci.intent, '') || ' ' || coalesce(ci."archImpact", '') || ' ' || coalesce(ci."perfImpact", ''))
+            @@ plainto_tsquery('english', ${query})
     ) combined
     ORDER BY rank DESC
     LIMIT ${limit}
