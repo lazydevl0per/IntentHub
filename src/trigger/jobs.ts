@@ -74,6 +74,12 @@ export const syncRepositoryTask = task({
     for (const commit of commits) {
       try {
         await indexCommit(payload.repositoryId, commit.sha);
+        if (process.env.OPENAI_API_KEY) {
+          const { generateCommitInsight } = await import(
+            "@/lib/ai/commit-insights"
+          );
+          await generateCommitInsight(payload.repositoryId, commit.sha);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Index failed";
         errors.push(`${commit.sha.slice(0, 7)}: ${message}`);
@@ -121,6 +127,12 @@ export const githubWebhookTask = task({
       for (const commit of payload.commits) {
         try {
           await indexCommit(payload.repositoryId, commit.id);
+          if (process.env.OPENAI_API_KEY) {
+            const { generateCommitInsight } = await import(
+              "@/lib/ai/commit-insights"
+            );
+            await generateCommitInsight(payload.repositoryId, commit.id);
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : "Index failed";
           errors.push(`${commit.id.slice(0, 7)}: ${message}`);
@@ -202,5 +214,26 @@ export const reindexRepositoryTask = task({
       objectives: repository.objectives.length,
       commits: repository.commits.length,
     };
+  },
+});
+
+export const generateObjectiveSummaryTask = task({
+  id: "generate-objective-summary",
+  run: async (payload: { objectiveId: string }) => {
+    const { generateObjectiveSummary } = await import("@/lib/ai/summaries");
+    const objective = await generateObjectiveSummary(payload.objectiveId);
+    return { objectiveId: objective.id };
+  },
+});
+
+export const analyzeCommitTask = task({
+  id: "analyze-commit",
+  run: async (payload: { repositoryId: string; sha: string }) => {
+    const { generateCommitInsight } = await import("@/lib/ai/commit-insights");
+    const insight = await generateCommitInsight(
+      payload.repositoryId,
+      payload.sha
+    );
+    return { sha: insight.sha };
   },
 });

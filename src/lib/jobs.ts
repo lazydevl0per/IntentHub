@@ -4,6 +4,8 @@ import type {
   IndexEntityPayload,
 } from "@/trigger/jobs";
 import {
+  analyzeCommitTask,
+  generateObjectiveSummaryTask,
   githubWebhookTask,
   indexEntityTask,
   reindexRepositoryTask,
@@ -32,10 +34,84 @@ function useTrigger() {
 
 export async function enqueueIndexEntity(payload: IndexEntityPayload) {
   if (useTrigger()) {
-    return tasks.trigger<typeof indexEntityTask>("index-entity", payload);
+    const handle = await tasks.trigger<typeof indexEntityTask>(
+      "index-entity",
+      payload
+    );
+
+    if (payload.entity === "commit") {
+      await tasks.trigger<typeof analyzeCommitTask>("analyze-commit", {
+        repositoryId: payload.repositoryId,
+        sha: payload.sha,
+      });
+    }
+
+    return handle;
   }
 
   await runIndexEntity(payload);
+
+  if (payload.entity === "commit") {
+    await runAnalyzeCommit(payload.repositoryId, payload.sha);
+  }
+
+  return null;
+}
+
+async function runAnalyzeCommit(repositoryId: string, sha: string) {
+  if (!process.env.OPENAI_API_KEY) {
+    return;
+  }
+
+  try {
+    const { generateCommitInsight } = await import("@/lib/ai/commit-insights");
+    await generateCommitInsight(repositoryId, sha);
+  } catch (error) {
+    console.error("[insight] commit analysis failed", {
+      repositoryId,
+      sha,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+}
+
+export async function enqueueGenerateObjectiveSummary(objectiveId: string) {
+  if (useTrigger()) {
+    return tasks.trigger<typeof generateObjectiveSummaryTask>(
+      "generate-objective-summary",
+      { objectiveId }
+    );
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return null;
+  }
+
+  try {
+    const { generateObjectiveSummary } = await import("@/lib/ai/summaries");
+    await generateObjectiveSummary(objectiveId);
+  } catch (error) {
+    console.error("[summary] objective summary failed", {
+      objectiveId,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+
+  return null;
+}
+
+export async function enqueueAnalyzeCommit(
+  repositoryId: string,
+  sha: string
+) {
+  if (useTrigger()) {
+    return tasks.trigger<typeof analyzeCommitTask>("analyze-commit", {
+      repositoryId,
+      sha,
+    });
+  }
+
+  await runAnalyzeCommit(repositoryId, sha);
   return null;
 }
 

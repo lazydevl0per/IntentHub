@@ -5,7 +5,7 @@ import {
   requireObjectiveAccess,
   unauthorized,
 } from "@/lib/api";
-import { enqueueIndexEntity } from "@/lib/jobs";
+import { enqueueIndexEntity, enqueueGenerateObjectiveSummary } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { decisionSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
@@ -76,6 +76,15 @@ export async function POST(
     await enqueueIndexEntity({ entity: "decision", objectiveId: id });
   } catch (error) {
     console.error("[index] decision indexing enqueue failed", {
+      objectiveId: id,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+
+  try {
+    await enqueueGenerateObjectiveSummary(id);
+  } catch (error) {
+    console.error("[summary] objective summary enqueue failed", {
       objectiveId: id,
       error: error instanceof Error ? error.message : error,
     });
