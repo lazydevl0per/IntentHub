@@ -54,7 +54,13 @@ export async function createEmbedding(text: string, maxAttempts = 3) {
   throw lastError;
 }
 
-async function anthropicChatCompletion(messages: ChatMessage[]) {
+export type ChatCompletionResult = {
+  content: string;
+  promptTokens?: number;
+  completionTokens?: number;
+};
+
+async function anthropicChatCompletionWithUsage(messages: ChatMessage[]) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
@@ -71,7 +77,9 @@ async function anthropicChatCompletion(messages: ChatMessage[]) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: getChatModel().startsWith("claude") ? getChatModel() : "claude-3-5-haiku-20241022",
+      model: getChatModel().startsWith("claude")
+        ? getChatModel()
+        : "claude-3-5-haiku-20241022",
       max_tokens: 4096,
       system,
       messages: conversation.map((m) => ({
@@ -88,9 +96,19 @@ async function anthropicChatCompletion(messages: ChatMessage[]) {
 
   const data = (await response.json()) as {
     content: Array<{ type: string; text?: string }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
   };
 
-  return data.content.find((c) => c.type === "text")?.text ?? "";
+  return {
+    content: data.content.find((c) => c.type === "text")?.text ?? "",
+    promptTokens: data.usage?.input_tokens,
+    completionTokens: data.usage?.output_tokens,
+  };
+}
+
+async function anthropicChatCompletion(messages: ChatMessage[]) {
+  const result = await anthropicChatCompletionWithUsage(messages);
+  return result.content;
 }
 
 async function* anthropicStreamChatCompletion(messages: ChatMessage[]) {
@@ -98,19 +116,35 @@ async function* anthropicStreamChatCompletion(messages: ChatMessage[]) {
   yield content;
 }
 
-export async function chatCompletion(messages: ChatMessage[]) {
-  if (getProvider() === "anthropic") {
-    return anthropicChatCompletion(messages);
+export async function chatCompletionWithUsage(
+  messages: ChatMessage[],
+  model?: string
+): Promise<ChatCompletionResult> {
+  const chatModel = model ?? getChatModel();
+  const useOpenAI =
+    getProvider() === "openai" || chatModel.startsWith("gpt");
+
+  if (useOpenAI) {
+    const openai = getOpenAI();
+    const response = await openai.chat.completions.create({
+      model: chatModel,
+      messages,
+      temperature: 0.2,
+    });
+
+    return {
+      content: response.choices[0]?.message?.content ?? "",
+      promptTokens: response.usage?.prompt_tokens,
+      completionTokens: response.usage?.completion_tokens,
+    };
   }
 
-  const openai = getOpenAI();
-  const response = await openai.chat.completions.create({
-    model: getChatModel(),
-    messages,
-    temperature: 0.2,
-  });
+  return anthropicChatCompletionWithUsage(messages);
+}
 
-  return response.choices[0]?.message?.content ?? "";
+export async function chatCompletion(messages: ChatMessage[]) {
+  const result = await chatCompletionWithUsage(messages);
+  return result.content;
 }
 
 export async function chatCompletionJson<T>(

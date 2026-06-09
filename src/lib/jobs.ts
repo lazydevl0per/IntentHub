@@ -5,6 +5,7 @@ import type {
 } from "@/trigger/jobs";
 import {
   analyzeCommitTask,
+  executeAgentRunTask,
   generateObjectiveSummaryTask,
   githubWebhookTask,
   indexEntityTask,
@@ -243,5 +244,17 @@ export async function enqueueReindexRepository(repositoryId: string) {
     await indexCommit(repositoryId, commit.sha);
   }
 
+  return null;
+}
+
+export async function enqueueExecuteAgentRun(agentRunId: string) {
+  if (useTrigger()) {
+    return tasks.trigger<typeof executeAgentRunTask>("execute-agent-run", {
+      agentRunId,
+    });
+  }
+
+  const { executeAgentRun } = await import("@/lib/ai/agent-executor");
+  await executeAgentRun(agentRunId);
   return null;
 }

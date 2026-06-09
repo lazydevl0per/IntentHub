@@ -237,3 +237,12 @@ export const analyzeCommitTask = task({
     return { sha: insight.sha };
   },
 });
+
+export const executeAgentRunTask = task({
+  id: "execute-agent-run",
+  run: async (payload: { agentRunId: string }) => {
+    const { executeAgentRun } = await import("@/lib/ai/agent-executor");
+    const run = await executeAgentRun(payload.agentRunId);
+    return { agentRunId: run.id, status: run.status };
+  },
+});

@@ -418,3 +418,57 @@ export async function getCommitStats(repositoryId: string, sha: string) {
     filesChanged: data.files?.length ?? 0,
   };
 }
+
+export async function createRepositoryBranch(
+  repositoryId: string,
+  branchName: string,
+  userId: string
+) {
+  const repository = await prisma.repository.findUnique({
+    where: { id: repositoryId },
+  });
+
+  if (!repository) {
+    throw new Error("Repository not found");
+  }
+
+  const token = await getUserGitHubToken(userId);
+  if (!token) {
+    throw new Error("GitHub token not found");
+  }
+
+  const octokit = createOctokit(token);
+  const [owner, repo] = repository.fullName.split("/");
+
+  const { data: baseRef } = await octokit.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${repository.defaultBranch}`,
+  });
+
+  await octokit.git.createRef({
+    owner,
+    repo,
+    ref: `refs/heads/${branchName}`,
+    sha: baseRef.object.sha,
+  });
+
+  await prisma.gitBranch.upsert({
+    where: {
+      repositoryId_name: {
+        repositoryId,
+        name: branchName,
+      },
+    },
+    create: {
+      repositoryId,
+      name: branchName,
+      headSha: baseRef.object.sha,
+    },
+    update: {
+      headSha: baseRef.object.sha,
+    },
+  });
+
+  return branchName;
+}
