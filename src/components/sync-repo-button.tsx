@@ -14,11 +14,16 @@ export function SyncRepositoryButton({
 
   async function handleSync() {
     setLoading(true);
-    await fetch(`/api/repositories/${repositoryId}/sync`, {
+    const res = await fetch(`/api/repositories/${repositoryId}/sync`, {
       method: "POST",
     });
     setLoading(false);
-    router.refresh();
+
+    if (res.status === 202) {
+      setTimeout(() => router.refresh(), 3000);
+    } else {
+      router.refresh();
+    }
   }
 
   return (

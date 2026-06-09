@@ -5,7 +5,7 @@ import {
   requireObjectiveAccess,
   unauthorized,
 } from "@/lib/api";
-import { indexAgentRun } from "@/lib/indexing";
+import { enqueueIndexEntity } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { agentRunSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
@@ -42,8 +42,12 @@ export async function POST(
   });
 
   try {
-    await indexAgentRun(agentRun.id);
-  } catch {
+    await enqueueIndexEntity({ entity: "agent-run", id: agentRun.id });
+  } catch (error) {
+    console.error("[index] agent run indexing enqueue failed", {
+      agentRunId: agentRun.id,
+      error: error instanceof Error ? error.message : error,
+    });
   }
 
   return NextResponse.json(agentRun, { status: 201 });

@@ -5,7 +5,7 @@ import {
   requireObjectiveAccess,
   unauthorized,
 } from "@/lib/api";
-import { indexEvaluation } from "@/lib/indexing";
+import { enqueueIndexEntity } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { evaluationSchema } from "@/lib/validations";
@@ -42,8 +42,12 @@ export async function POST(
   });
 
   try {
-    await indexEvaluation(evaluation.id);
-  } catch {
+    await enqueueIndexEntity({ entity: "evaluation", id: evaluation.id });
+  } catch (error) {
+    console.error("[index] evaluation indexing enqueue failed", {
+      evaluationId: evaluation.id,
+      error: error instanceof Error ? error.message : error,
+    });
   }
 
   return NextResponse.json(evaluation, { status: 201 });

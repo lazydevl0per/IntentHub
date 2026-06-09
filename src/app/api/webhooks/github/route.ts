@@ -1,10 +1,5 @@
-import {
-  handleBranchCreateWebhook,
-  handleBranchDeleteWebhook,
-  handlePushWebhook,
-  verifyGitHubWebhook,
-} from "@/lib/github";
-import { indexCommit } from "@/lib/indexing";
+import { verifyGitHubWebhook } from "@/lib/github";
+import { enqueueGitHubWebhook } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -50,27 +45,63 @@ export async function POST(request: Request) {
   }
 
   if (event === "push" && data.ref && data.commits) {
-    await handlePushWebhook(repository.id, {
+    const handle = await enqueueGitHubWebhook({
+      repositoryId: repository.id,
+      event: "push",
       ref: data.ref,
       commits: data.commits,
     });
 
-    for (const commit of data.commits) {
-      try {
-        await indexCommit(repository.id, commit.id);
-      } catch {
-      }
-    }
-  } else if (event === "create" && data.ref && data.ref_type) {
-    await handleBranchCreateWebhook(repository.id, {
+    return NextResponse.json(
+      {
+        ok: true,
+        delivery,
+        event,
+        queued: Boolean(handle),
+        runId: handle?.id,
+      },
+      { status: handle ? 202 : 200 }
+    );
+  }
+
+  if (event === "create" && data.ref && data.ref_type) {
+    const handle = await enqueueGitHubWebhook({
+      repositoryId: repository.id,
+      event: "create",
       ref: data.ref,
-      ref_type: data.ref_type,
+      refType: data.ref_type,
     });
-  } else if (event === "delete" && data.ref && data.ref_type) {
-    await handleBranchDeleteWebhook(repository.id, {
+
+    return NextResponse.json(
+      {
+        ok: true,
+        delivery,
+        event,
+        queued: Boolean(handle),
+        runId: handle?.id,
+      },
+      { status: handle ? 202 : 200 }
+    );
+  }
+
+  if (event === "delete" && data.ref && data.ref_type) {
+    const handle = await enqueueGitHubWebhook({
+      repositoryId: repository.id,
+      event: "delete",
       ref: data.ref,
-      ref_type: data.ref_type,
+      refType: data.ref_type,
     });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        delivery,
+        event,
+        queued: Boolean(handle),
+        runId: handle?.id,
+      },
+      { status: handle ? 202 : 200 }
+    );
   }
 
   return NextResponse.json({

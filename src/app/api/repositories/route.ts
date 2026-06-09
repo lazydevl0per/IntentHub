@@ -3,7 +3,8 @@ import {
   getSessionUser,
   unauthorized,
 } from "@/lib/api";
-import { syncRepository, registerRepositoryWebhook } from "@/lib/github";
+import { registerRepositoryWebhook } from "@/lib/github";
+import { enqueueSyncRepository } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { connectRepoSchema } from "@/lib/validations";
 import crypto from "crypto";
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
     },
   });
 
-  let syncStatus: "success" | "failed" = "success";
+  let syncStatus: "success" | "failed" | "queued" = "queued";
   let syncError: string | undefined;
   let webhookStatus: "success" | "failed" | "skipped" = "skipped";
   let webhookError: string | undefined;
@@ -105,11 +106,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    await syncRepository(repository.id);
+    const handle = await enqueueSyncRepository(repository.id);
+    syncStatus = handle ? "queued" : "success";
   } catch (error) {
     syncStatus = "failed";
     syncError = error instanceof Error ? error.message : "Sync failed";
-    console.error("[sync] repository connect failed", {
+    console.error("[sync] repository connect enqueue failed", {
       repositoryId: repository.id,
       error: syncError,
     });

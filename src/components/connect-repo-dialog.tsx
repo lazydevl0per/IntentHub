@@ -68,8 +68,10 @@ export function ConnectRepoDialog() {
 
     if (data.syncStatus === "failed") {
       setError(
-        `Repository connected but initial sync failed: ${data.syncError ?? "Unknown error"}. Use Sync on the repository page to retry.`
+        `Repository connected but sync failed: ${data.syncError ?? "Unknown error"}. Use Sync on the repository page to retry.`
       );
+    } else if (data.syncStatus === "queued") {
+      setError("");
     } else if (data.webhookStatus === "failed") {
       setError(
         `Repository connected but webhook registration failed: ${data.webhookError ?? "Unknown error"}. Check Settings to configure manually.`

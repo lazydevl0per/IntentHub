@@ -5,7 +5,7 @@ import {
   requireObjectiveAccess,
   unauthorized,
 } from "@/lib/api";
-import { indexPlan } from "@/lib/indexing";
+import { enqueueIndexEntity } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { planSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
@@ -39,8 +39,12 @@ export async function POST(
   });
 
   try {
-    await indexPlan(plan.id);
-  } catch {
+    await enqueueIndexEntity({ entity: "plan", id: plan.id });
+  } catch (error) {
+    console.error("[index] plan indexing enqueue failed", {
+      planId: plan.id,
+      error: error instanceof Error ? error.message : error,
+    });
   }
 
   return NextResponse.json(plan, { status: 201 });

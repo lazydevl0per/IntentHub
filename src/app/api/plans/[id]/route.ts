@@ -4,7 +4,7 @@ import {
   notFound,
   unauthorized,
 } from "@/lib/api";
-import { indexPlan } from "@/lib/indexing";
+import { enqueueIndexEntity } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { planSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
@@ -53,8 +53,12 @@ export async function PATCH(
   });
 
   try {
-    await indexPlan(updated.id);
-  } catch {
+    await enqueueIndexEntity({ entity: "plan", id: updated.id });
+  } catch (error) {
+    console.error("[index] plan indexing enqueue failed", {
+      planId: updated.id,
+      error: error instanceof Error ? error.message : error,
+    });
   }
 
   return NextResponse.json(updated);

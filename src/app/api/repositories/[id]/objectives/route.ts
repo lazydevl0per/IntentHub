@@ -5,7 +5,7 @@ import {
   requireRepoAccess,
   unauthorized,
 } from "@/lib/api";
-import { indexObjective } from "@/lib/indexing";
+import { enqueueIndexEntity } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { objectiveSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
@@ -72,8 +72,12 @@ export async function POST(
   });
 
   try {
-    await indexObjective(objective.id);
-  } catch {
+    await enqueueIndexEntity({ entity: "objective", id: objective.id });
+  } catch (error) {
+    console.error("[index] objective indexing enqueue failed", {
+      objectiveId: objective.id,
+      error: error instanceof Error ? error.message : error,
+    });
   }
 
   return NextResponse.json(objective, { status: 201 });
