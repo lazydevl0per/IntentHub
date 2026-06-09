@@ -65,6 +65,18 @@ export function ConnectRepoDialog() {
     }
 
     const data = await res.json();
+
+    if (data.syncStatus === "failed") {
+      setError(
+        `Repository connected but initial sync failed: ${data.syncError ?? "Unknown error"}. Use Sync on the repository page to retry.`
+      );
+      setConnecting(null);
+      setOpen(false);
+      router.push(`/repositories/${data.id}`);
+      router.refresh();
+      return;
+    }
+
     setOpen(false);
     setConnecting(null);
     router.push(`/repositories/${data.id}`);

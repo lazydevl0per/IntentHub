@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ConnectRepoDialog } from "@/components/connect-repo-dialog";
 import { EmptyState } from "@/components/app-shell";
+import { LinkGitHubBanner } from "@/components/link-github-banner";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
+import { getUserGitHubToken } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
 import { GitBranch, Target } from "lucide-react";
 
@@ -11,7 +13,8 @@ export default async function DashboardPage() {
   const session = await auth();
   const userId = session!.user!.id;
 
-  const [repositories, activeObjectives, recentDecisions] = await Promise.all([
+  const [repositories, activeObjectives, recentDecisions, githubToken] =
+    await Promise.all([
     prisma.repository.findMany({
       where: {
         members: { some: { userId } },
@@ -56,6 +59,7 @@ export default async function DashboardPage() {
       take: 6,
       orderBy: { approvedAt: "desc" },
     }),
+    getUserGitHubToken(userId),
   ]);
 
   return (
@@ -69,6 +73,8 @@ export default async function DashboardPage() {
         </div>
         <ConnectRepoDialog />
       </div>
+
+      {!githubToken && <LinkGitHubBanner />}
 
       <section className="grid gap-4 md:grid-cols-3">
         <Card>
