@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +11,13 @@ type Message = {
   content: string;
 };
 
+type ChatSession = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  _count: { messages: number };
+};
+
 const suggestions = [
   "Why was this architecture chosen?",
   "What alternatives were rejected?",
@@ -18,9 +25,39 @@ const suggestions = [
 ];
 
 export function RepoChat({ repositoryId }: { repositoryId: string }) {
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/repositories/${repositoryId}/chat`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setSessions)
+      .catch(() => setSessions([]));
+  }, [repositoryId]);
+
+  async function loadSession(id: string) {
+    const res = await fetch(
+      `/api/repositories/${repositoryId}/chat/sessions/${id}`
+    );
+    if (!res.ok) return;
+
+    const data = await res.json();
+    setSessionId(data.id);
+    setMessages(
+      data.messages.map((m: { role: string; content: string }) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }))
+    );
+  }
+
+  function startNewChat() {
+    setSessionId(null);
+    setMessages([]);
+  }
 
   async function sendMessage(message: string) {
     if (!message.trim() || loading) return;
@@ -35,9 +72,14 @@ export function RepoChat({ repositoryId }: { repositoryId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message,
-        history: messages,
+        sessionId: sessionId ?? undefined,
       }),
     });
+
+    const newSessionId = res.headers.get("X-Chat-Session-Id");
+    if (newSessionId && !sessionId) {
+      setSessionId(newSessionId);
+    }
 
     const reader = res.body?.getReader();
     let assistantContent = "";
@@ -62,12 +104,39 @@ export function RepoChat({ repositoryId }: { repositoryId: string }) {
     }
 
     setLoading(false);
+
+    fetch(`/api/repositories/${repositoryId}/chat`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setSessions)
+      .catch(() => {});
   }
 
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="text-lg">Ask Repository</CardTitle>
+      <CardHeader className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-lg">Ask Repository</CardTitle>
+          <Button variant="outline" size="sm" onClick={startNewChat}>
+            New chat
+          </Button>
+        </div>
+        {sessions.length > 0 && (
+          <ScrollArea className="h-20">
+            <div className="flex flex-wrap gap-2">
+              {sessions.map((session) => (
+                <Button
+                  key={session.id}
+                  variant={sessionId === session.id ? "default" : "outline"}
+                  size="sm"
+                  className="max-w-full truncate"
+                  onClick={() => loadSession(session.id)}
+                >
+                  {session.title}
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">

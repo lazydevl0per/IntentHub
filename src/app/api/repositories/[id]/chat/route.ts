@@ -1,5 +1,4 @@
 import {
-  badRequest,
   getSessionUser,
   notFound,
   requireRepoAccess,
@@ -7,7 +6,31 @@ import {
 } from "@/lib/api";
 import { streamRepositoryChat } from "@/lib/ai/rag";
 import { chatSchema } from "@/lib/validations";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
+  const { id } = await params;
+  const member = await requireRepoAccess(id, user.id);
+  if (!member) return notFound();
+
+  const sessions = await prisma.chatSession.findMany({
+    where: { repositoryId: id, userId: user.id },
+    orderBy: { updatedAt: "desc" },
+    take: 20,
+    include: {
+      _count: { select: { messages: true } },
+    },
+  });
+
+  return NextResponse.json(sessions);
+}
 
 export async function POST(
   request: Request,
@@ -23,20 +46,80 @@ export async function POST(
   const body = await request.json();
   const parsed = chatSchema.safeParse(body);
   if (!parsed.success) {
-    return badRequest("Invalid chat message");
+    return NextResponse.json({ error: "Invalid chat message" }, { status: 400 });
   }
 
+  let sessionId = parsed.data.sessionId;
+
+  if (sessionId) {
+    const existing = await prisma.chatSession.findFirst({
+      where: { id: sessionId, repositoryId: id, userId: user.id },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+  } else {
+    const session = await prisma.chatSession.create({
+      data: {
+        repositoryId: id,
+        userId: user.id,
+        title: parsed.data.message.slice(0, 80),
+      },
+    });
+    sessionId = session.id;
+  }
+
+  await prisma.chatMessage.create({
+    data: {
+      sessionId,
+      role: "user",
+      content: parsed.data.message,
+    },
+  });
+
+  const priorMessages = await prisma.chatMessage.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: "asc" },
+    take: 20,
+  });
+
+  const history = priorMessages
+    .slice(0, -1)
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
   const encoder = new TextEncoder();
+  const sessionIdHeader = sessionId;
+
   const stream = new ReadableStream({
     async start(controller) {
+      let assistantContent = "";
+
       try {
         for await (const chunk of streamRepositoryChat({
           repositoryId: id,
           message: parsed.data.message,
-          history: parsed.data.history,
+          history,
         })) {
+          assistantContent += chunk;
           controller.enqueue(encoder.encode(chunk));
         }
+
+        await prisma.chatMessage.create({
+          data: {
+            sessionId: sessionIdHeader,
+            role: "assistant",
+            content: assistantContent,
+          },
+        });
+
+        await prisma.chatSession.update({
+          where: { id: sessionIdHeader },
+          data: { updatedAt: new Date() },
+        });
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Chat failed";
@@ -51,6 +134,7 @@ export async function POST(
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-cache",
+      "X-Chat-Session-Id": sessionId,
     },
   });
 }

@@ -47,6 +47,7 @@ export const decisionSchema = z.object({
 
 export const chatSchema = z.object({
   message: z.string().min(1).max(4000),
+  sessionId: z.string().optional(),
   history: z
     .array(
       z.object({
