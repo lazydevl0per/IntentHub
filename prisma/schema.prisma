@@ -74,6 +74,7 @@ model User {
   agentRuns          AgentRun[]
   evaluations        Evaluation[]
   decisions          Decision[]
+  chatSessions       ChatSession[]
 }
 
 model Account {
@@ -127,8 +128,10 @@ model Repository {
   members     RepositoryMember[]
   objectives  Objective[]
   commits     GitCommit[]
-  branches    GitBranch[]
-  chunks      DocumentChunk[]
+  branches      GitBranch[]
+  chunks        DocumentChunk[]
+  commitInsights CommitInsight[]
+  chatSessions  ChatSession[]
 
   @@unique([owner, name])
 }
@@ -163,6 +166,11 @@ model Objective {
   agentRuns   AgentRun[]
   evaluations Evaluation[]
   decision    Decision?
+  commitInsights CommitInsight[]
+  businessSummary    String? @db.Text
+  technicalSummary   String? @db.Text
+  risks              String? @db.Text
+  architectureImpact String? @db.Text
 
   @@index([repositoryId])
   @@index([status])
@@ -258,6 +266,51 @@ model GitCommit {
 
   @@unique([repositoryId, sha])
   @@index([repositoryId, committedAt])
+}
+
+model CommitInsight {
+  id           String   @id @default(cuid())
+  repositoryId String
+  sha          String
+  objectiveId  String?
+  intent       String   @db.Text
+  archImpact   String?  @db.Text
+  perfImpact   String?  @db.Text
+  testStatus   String?
+  createdAt    DateTime @default(now())
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  objective  Objective? @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+
+  @@unique([repositoryId, sha])
+  @@index([repositoryId])
+}
+
+model ChatSession {
+  id           String   @id @default(cuid())
+  repositoryId String
+  userId       String
+  title        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  repository Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   ChatMessage[]
+
+  @@index([repositoryId, userId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }
 
 model GitBranch {
