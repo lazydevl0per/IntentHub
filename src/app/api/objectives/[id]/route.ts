@@ -1,5 +1,6 @@
 import {
   badRequest,
+  demoReadonly,
   getSessionUser,
   notFound,
   requireObjectiveAccess,
@@ -76,6 +77,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const readonly = demoReadonly();
+  if (readonly) return readonly;
+
   const user = await getSessionUser();
   if (!user) return unauthorized();
 
@@ -110,6 +114,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const readonly = demoReadonly();
+  if (readonly) return readonly;
+
   const user = await getSessionUser();
   if (!user) return unauthorized();
 

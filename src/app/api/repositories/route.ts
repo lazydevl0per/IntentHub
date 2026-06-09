@@ -1,5 +1,6 @@
 import {
   badRequest,
+  demoReadonly,
   getSessionUser,
   unauthorized,
 } from "@/lib/api";
@@ -35,6 +36,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const readonly = demoReadonly();
+  if (readonly) return readonly;
+
   const user = await getSessionUser();
   if (!user) return unauthorized();
 

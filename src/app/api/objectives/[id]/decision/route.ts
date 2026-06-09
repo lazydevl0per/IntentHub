@@ -1,5 +1,6 @@
 import {
   badRequest,
+  demoReadonly,
   getSessionUser,
   notFound,
   requireObjectiveAccess,
@@ -14,6 +15,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const readonly = demoReadonly();
+  if (readonly) return readonly;
+
   const user = await getSessionUser();
   if (!user) return unauthorized();
 

@@ -1,4 +1,5 @@
 import {
+  demoReadonly,
   getSessionUser,
   notFound,
   requireRepoAccess,
@@ -12,6 +13,9 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const readonly = demoReadonly();
+  if (readonly) return readonly;
+
   const user = await getSessionUser();
   if (!user) return unauthorized();
 
