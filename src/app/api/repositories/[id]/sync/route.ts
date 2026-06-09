@@ -29,10 +29,20 @@ export async function POST(
       orderBy: { committedAt: "desc" },
     });
 
+    const indexErrors: string[] = [];
+
     for (const commit of commits) {
       try {
         await indexCommit(id, commit.sha);
-      } catch {
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Index failed";
+        indexErrors.push(`${commit.sha.slice(0, 7)}: ${message}`);
+        console.error("[index] commit indexing failed", {
+          repositoryId: id,
+          sha: commit.sha,
+          error: message,
+        });
       }
     }
 
@@ -40,8 +50,14 @@ export async function POST(
       where: { id },
     });
 
-    return NextResponse.json(repository);
+    return NextResponse.json({
+      ...repository,
+      syncStatus: "success" as const,
+      indexErrors: indexErrors.length > 0 ? indexErrors : undefined,
+    });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Sync failed";
+    console.error("[sync] manual sync failed", { repositoryId: id, error: message });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Sync failed" },
       { status: 500 }

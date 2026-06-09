@@ -11,8 +11,9 @@ export default auth((req) => {
     req.nextUrl.pathname.startsWith("/register");
   const isApiAuth = req.nextUrl.pathname.startsWith("/api/auth");
   const isWebhook = req.nextUrl.pathname.startsWith("/api/webhooks");
+  const isHealth = req.nextUrl.pathname === "/api/health";
 
-  if (isApiAuth || isWebhook) {
+  if (isApiAuth || isWebhook || isHealth) {
     return NextResponse.next();
   }
 

@@ -87,9 +87,18 @@ export async function POST(request: Request) {
     },
   });
 
+  let syncStatus: "success" | "failed" = "success";
+  let syncError: string | undefined;
+
   try {
     await syncRepository(repository.id);
-  } catch {
+  } catch (error) {
+    syncStatus = "failed";
+    syncError = error instanceof Error ? error.message : "Sync failed";
+    console.error("[sync] repository connect failed", {
+      repositoryId: repository.id,
+      error: syncError,
+    });
   }
 
   const refreshed = await prisma.repository.findUnique({
@@ -104,5 +113,8 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json(refreshed, { status: 201 });
+  return NextResponse.json(
+    { ...refreshed, syncStatus, syncError },
+    { status: 201 }
+  );
 }
