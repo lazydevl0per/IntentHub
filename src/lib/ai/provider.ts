@@ -13,14 +13,31 @@ function getOpenAI() {
   return new OpenAI({ apiKey });
 }
 
-export async function createEmbedding(text: string) {
-  const openai = getOpenAI();
-  const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: text,
-  });
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  return response.data[0].embedding;
+export async function createEmbedding(text: string, maxAttempts = 3) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const openai = getOpenAI();
+      const response = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: text,
+      });
+
+      return response.data[0].embedding;
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        await sleep(Math.min(1000 * 2 ** (attempt - 1), 10000));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 export async function chatCompletion(messages: ChatMessage[]) {
