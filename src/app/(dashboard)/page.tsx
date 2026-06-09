@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ConnectRepoDialog } from "@/components/connect-repo-dialog";
 import { EmptyState } from "@/components/app-shell";
 import { LinkGitHubBanner } from "@/components/link-github-banner";
+import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardData } from "@/lib/data/dashboard";
@@ -30,6 +31,10 @@ export default async function DashboardPage() {
       </div>
 
       {!githubToken && !demoMode && <LinkGitHubBanner />}
+
+      {repositories.length === 0 && !demoMode && (
+        <OnboardingWizard demoMode={demoMode} />
+      )}
 
       <section className="grid gap-4 md:grid-cols-3">
         <Card>

@@ -48,6 +48,16 @@ Open [http://localhost:3000](http://localhost:3000). Sample data is pre-loaded â
 
 For full functionality, use the [Local Setup](#local-setup) below.
 
+### Public demo hosting
+
+Deploy a read-only demo to Vercel without a database:
+
+1. Create a Vercel project from this repository
+2. Set `DEMO_MODE=true` and `NEXT_PUBLIC_DEMO_MODE=true`
+3. Set `AUTH_SECRET` to any random string and `NEXT_PUBLIC_APP_URL` to your Vercel URL
+4. Use the build command from `vercel.json` (`prisma generate && next build`)
+5. Open the deployed URL â€” sample data loads from fixtures with write actions disabled
+
 ## Local Setup
 
 ### 1. Start PostgreSQL
@@ -123,7 +133,7 @@ When you connect a repository, IntentHub automatically registers a webhook at:
 POST /api/webhooks/github
 ```
 
-Events: `push`, `create`, `delete`
+Events: `push`, `create`, `delete`, `pull_request`, `check_run`
 
 Check webhook status on the repository **Settings** page. If auto-registration fails, verify `NEXT_PUBLIC_APP_URL` is correct.
 
