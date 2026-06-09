@@ -17,12 +17,32 @@ export async function POST(request: Request) {
     repository?: { id: number };
     ref?: string;
     ref_type?: string;
+    action?: string;
     commits?: Array<{
       id: string;
       message: string;
       author: { name: string };
       timestamp: string;
     }>;
+    pull_request?: {
+      id: number;
+      number: number;
+      title: string;
+      state: string;
+      merged: boolean;
+      merged_at: string | null;
+      merge_commit_sha: string | null;
+      html_url: string;
+      head: { ref: string };
+      base: { ref: string };
+    };
+    check_run?: {
+      name: string;
+      conclusion: string | null;
+      status: string;
+      head_branch: string;
+      output?: { summary?: string | null; title?: string | null };
+    };
   };
 
   if (!data.repository?.id) {
@@ -90,6 +110,50 @@ export async function POST(request: Request) {
       event: "delete",
       ref: data.ref,
       refType: data.ref_type,
+    });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        delivery,
+        event,
+        queued: Boolean(handle),
+        runId: handle?.id,
+      },
+      { status: handle ? 202 : 200 }
+    );
+  }
+
+  if (event === "pull_request" && data.action && data.pull_request) {
+    const handle = await enqueueGitHubWebhook({
+      repositoryId: repository.id,
+      event: "pull_request",
+      pullRequest: {
+        action: data.action,
+        pull_request: data.pull_request,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        delivery,
+        event,
+        queued: Boolean(handle),
+        runId: handle?.id,
+      },
+      { status: handle ? 202 : 200 }
+    );
+  }
+
+  if (event === "check_run" && data.action && data.check_run) {
+    const handle = await enqueueGitHubWebhook({
+      repositoryId: repository.id,
+      event: "check_run",
+      checkRun: {
+        action: data.action,
+        check_run: data.check_run,
+      },
     });
 
     return NextResponse.json(

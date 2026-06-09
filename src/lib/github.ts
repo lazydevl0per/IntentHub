@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import { PullRequestState } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
@@ -88,7 +89,7 @@ export async function registerRepositoryWebhook(
       content_type: "json",
       secret: repository.webhookSecret ?? undefined,
     },
-    events: ["push", "create", "delete"],
+    events: ["push", "create", "delete", "pull_request", "check_run"],
     active: true,
   });
 
@@ -251,6 +252,9 @@ export async function syncRepository(repositoryId: string) {
     where: { id: repositoryId },
     data: { lastSyncedAt: new Date() },
   });
+
+  await syncPullRequests(repositoryId);
+  await syncTags(repositoryId);
 }
 
 export function verifyGitHubWebhook(
@@ -471,4 +475,276 @@ export async function createRepositoryBranch(
   });
 
   return branchName;
+}
+
+export async function syncPullRequests(repositoryId: string) {
+  const repository = await prisma.repository.findUnique({
+    where: { id: repositoryId },
+    include: {
+      members: { where: { role: "OWNER" }, take: 1 },
+    },
+  });
+
+  if (!repository?.members[0]) return;
+
+  const token = await getUserGitHubToken(repository.members[0].userId);
+  if (!token) return;
+
+  const octokit = createOctokit(token);
+  const [owner, name] = repository.fullName.split("/");
+
+  const { data } = await octokit.pulls.list({
+    owner,
+    repo: name,
+    state: "all",
+    per_page: 50,
+  });
+
+  for (const pull of data) {
+    const agentRun = pull.head.ref.startsWith("intenthub/")
+      ? await prisma.agentRun.findFirst({
+          where: {
+            objective: { repositoryId },
+            branchName: pull.head.ref,
+          },
+        })
+      : null;
+
+    const state = pull.merged
+      ? PullRequestState.MERGED
+      : pull.state === "open"
+        ? PullRequestState.OPEN
+        : PullRequestState.CLOSED;
+
+    await prisma.gitPullRequest.upsert({
+      where: {
+        repositoryId_number: {
+          repositoryId,
+          number: pull.number,
+        },
+      },
+      create: {
+        repositoryId,
+        githubId: pull.id,
+        number: pull.number,
+        title: pull.title,
+        state,
+        headBranch: pull.head.ref,
+        baseBranch: pull.base.ref,
+        htmlUrl: pull.html_url,
+        mergedAt: pull.merged_at ? new Date(pull.merged_at) : null,
+        objectiveId: agentRun?.objectiveId,
+        agentRunId: agentRun?.id,
+      },
+      update: {
+        title: pull.title,
+        state,
+        headBranch: pull.head.ref,
+        baseBranch: pull.base.ref,
+        htmlUrl: pull.html_url,
+        mergedAt: pull.merged_at ? new Date(pull.merged_at) : null,
+        objectiveId: agentRun?.objectiveId ?? undefined,
+        agentRunId: agentRun?.id ?? undefined,
+      },
+    });
+
+    if (pull.merged && pull.merge_commit_sha) {
+      await prisma.deployment.upsert({
+        where: {
+          id: `${repositoryId}-${pull.number}`,
+        },
+        create: {
+          id: `${repositoryId}-${pull.number}`,
+          repositoryId,
+          environment: "production",
+          commitSha: pull.merge_commit_sha,
+          objectiveId: agentRun?.objectiveId,
+        },
+        update: {
+          commitSha: pull.merge_commit_sha,
+          deployedAt: new Date(),
+          objectiveId: agentRun?.objectiveId,
+        },
+      });
+    }
+  }
+}
+
+export async function syncTags(repositoryId: string) {
+  const repository = await prisma.repository.findUnique({
+    where: { id: repositoryId },
+    include: {
+      members: { where: { role: "OWNER" }, take: 1 },
+    },
+  });
+
+  if (!repository?.members[0]) return;
+
+  const token = await getUserGitHubToken(repository.members[0].userId);
+  if (!token) return;
+
+  const octokit = createOctokit(token);
+  const [owner, name] = repository.fullName.split("/");
+
+  const { data } = await octokit.repos.listTags({
+    owner,
+    repo: name,
+    per_page: 50,
+  });
+
+  for (const tag of data) {
+    if (!tag.name || !tag.commit.sha) continue;
+
+    await prisma.gitTag.upsert({
+      where: {
+        repositoryId_name: {
+          repositoryId,
+          name: tag.name,
+        },
+      },
+      create: {
+        repositoryId,
+        name: tag.name,
+        sha: tag.commit.sha,
+      },
+      update: {
+        sha: tag.commit.sha,
+      },
+    });
+  }
+}
+
+export async function handlePullRequestWebhook(
+  repositoryId: string,
+  payload: {
+    action: string;
+    pull_request: {
+      id: number;
+      number: number;
+      title: string;
+      state: string;
+      merged: boolean;
+      merged_at: string | null;
+      merge_commit_sha: string | null;
+      html_url: string;
+      head: { ref: string };
+      base: { ref: string };
+    };
+  }
+) {
+  const pull = payload.pull_request;
+
+  const agentRun = pull.head.ref.startsWith("intenthub/")
+    ? await prisma.agentRun.findFirst({
+        where: {
+          objective: { repositoryId },
+          branchName: pull.head.ref,
+        },
+      })
+    : null;
+
+  const state =
+    pull.merged || (payload.action === "closed" && Boolean(pull.merge_commit_sha))
+      ? PullRequestState.MERGED
+      : pull.state === "open"
+        ? PullRequestState.OPEN
+        : PullRequestState.CLOSED;
+
+  await prisma.gitPullRequest.upsert({
+    where: {
+      repositoryId_number: {
+        repositoryId,
+        number: pull.number,
+      },
+    },
+    create: {
+      repositoryId,
+      githubId: pull.id,
+      number: pull.number,
+      title: pull.title,
+      state,
+      headBranch: pull.head.ref,
+      baseBranch: pull.base.ref,
+      htmlUrl: pull.html_url,
+      mergedAt: pull.merged_at ? new Date(pull.merged_at) : null,
+      objectiveId: agentRun?.objectiveId,
+      agentRunId: agentRun?.id,
+    },
+    update: {
+      title: pull.title,
+      state,
+      htmlUrl: pull.html_url,
+      mergedAt: pull.merged_at ? new Date(pull.merged_at) : null,
+      objectiveId: agentRun?.objectiveId ?? undefined,
+      agentRunId: agentRun?.id ?? undefined,
+    },
+  });
+
+  if (pull.merged && pull.merge_commit_sha) {
+    await prisma.deployment.upsert({
+      where: { id: `${repositoryId}-${pull.number}` },
+      create: {
+        id: `${repositoryId}-${pull.number}`,
+        repositoryId,
+        environment: "production",
+        commitSha: pull.merge_commit_sha,
+        objectiveId: agentRun?.objectiveId,
+      },
+      update: {
+        commitSha: pull.merge_commit_sha,
+        deployedAt: new Date(),
+        objectiveId: agentRun?.objectiveId,
+      },
+    });
+  }
+}
+
+export async function handleCheckRunWebhook(
+  repositoryId: string,
+  payload: {
+    action: string;
+    check_run: {
+      name: string;
+      conclusion: string | null;
+      status: string;
+      head_branch: string;
+      output?: { summary?: string | null; title?: string | null };
+    };
+  }
+) {
+  if (payload.action !== "completed" || payload.check_run.status !== "completed") {
+    return;
+  }
+
+  const agentRun = await prisma.agentRun.findFirst({
+    where: {
+      objective: { repositoryId },
+      branchName: payload.check_run.head_branch,
+    },
+    include: { objective: true },
+  });
+
+  if (!agentRun) return;
+
+  const score =
+    payload.check_run.conclusion === "success"
+      ? 100
+      : payload.check_run.conclusion === "failure"
+        ? 0
+        : 50;
+
+  await prisma.evaluation.create({
+    data: {
+      objectiveId: agentRun.objectiveId,
+      planId: agentRun.planId,
+      agentRunId: agentRun.id,
+      type: "TEST",
+      score,
+      summary:
+        payload.check_run.output?.summary ??
+        payload.check_run.output?.title ??
+        `${payload.check_run.name}: ${payload.check_run.conclusion ?? "completed"}`,
+      createdById: agentRun.createdById,
+    },
+  });
 }

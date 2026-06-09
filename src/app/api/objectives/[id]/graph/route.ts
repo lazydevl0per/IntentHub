@@ -41,6 +41,10 @@ export async function GET(
           },
         },
       },
+      deployments: {
+        orderBy: { deployedAt: "desc" },
+        take: 5,
+      },
     },
   });
 
@@ -145,7 +149,65 @@ export async function GET(
           source: `decision-${objective.decision.id}`,
           target: `commit-${commit.id}`,
         });
+
+        const deployment = objective.deployments.find((item) =>
+          item.commitSha.startsWith(commit.sha.slice(0, 7))
+        );
+
+        if (deployment) {
+          nodes.push({
+            id: `deployment-${deployment.id}`,
+            type: "deployment",
+            label: deployment.environment,
+            data: { commitSha: deployment.commitSha },
+          });
+          edges.push({
+            id: `edge-commit-deployment-${deployment.id}`,
+            source: `commit-${commit.id}`,
+            target: `deployment-${deployment.id}`,
+          });
+        }
       }
+    }
+  }
+
+  for (const deployment of objective.deployments) {
+    if (nodes.some((node) => node.id === `deployment-${deployment.id}`)) {
+      continue;
+    }
+
+    nodes.push({
+      id: `deployment-${deployment.id}`,
+      type: "deployment",
+      label: deployment.environment,
+      data: { commitSha: deployment.commitSha },
+    });
+
+    const commit = objective.repository.commits.find((item) =>
+      item.sha.startsWith(deployment.commitSha.slice(0, 7))
+    );
+
+    if (commit) {
+      if (!nodes.some((node) => node.id === `commit-${commit.id}`)) {
+        nodes.push({
+          id: `commit-${commit.id}`,
+          type: "commit",
+          label: commit.sha.slice(0, 7),
+          data: { message: commit.message },
+        });
+      }
+
+      edges.push({
+        id: `edge-commit-deployment-${deployment.id}`,
+        source: `commit-${commit.id}`,
+        target: `deployment-${deployment.id}`,
+      });
+    } else {
+      edges.push({
+        id: `edge-objective-deployment-${deployment.id}`,
+        source: `objective-${objective.id}`,
+        target: `deployment-${deployment.id}`,
+      });
     }
   }
 

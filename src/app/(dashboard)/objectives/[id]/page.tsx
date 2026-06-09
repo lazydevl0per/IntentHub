@@ -136,6 +136,9 @@ export default async function ObjectivePage({
                   </div>
                   <p className="text-sm text-zinc-500">
                     Model: {run.model ?? "—"} · Branch: {run.branchName ?? "—"}
+                    {run.filesChanged != null && run.filesChanged > 0
+                      ? ` · ${run.filesChanged} files changed`
+                      : ""}
                     {(run.promptTokens ?? run.completionTokens) != null && (
                       <>
                         {" "}
@@ -143,6 +146,18 @@ export default async function ObjectivePage({
                       </>
                     )}
                   </p>
+                  {run.pullRequestUrl && (
+                    <p className="text-sm">
+                      <a
+                        href={run.pullRequestUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        Pull request #{run.pullRequestNumber}
+                      </a>
+                    </p>
+                  )}
                   {run.errorMessage && (
                     <p className="text-sm text-red-600">{run.errorMessage}</p>
                   )}

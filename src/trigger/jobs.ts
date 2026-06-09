@@ -96,7 +96,7 @@ export const syncRepositoryTask = task({
 
 export type GitHubWebhookPayload = {
   repositoryId: string;
-  event: "push" | "create" | "delete";
+  event: "push" | "create" | "delete" | "pull_request" | "check_run";
   ref?: string;
   refType?: string;
   commits?: Array<{
@@ -105,6 +105,31 @@ export type GitHubWebhookPayload = {
     author: { name: string };
     timestamp: string;
   }>;
+  pullRequest?: {
+    action: string;
+    pull_request: {
+      id: number;
+      number: number;
+      title: string;
+      state: string;
+      merged: boolean;
+      merged_at: string | null;
+      merge_commit_sha: string | null;
+      html_url: string;
+      head: { ref: string };
+      base: { ref: string };
+    };
+  };
+  checkRun?: {
+    action: string;
+    check_run: {
+      name: string;
+      conclusion: string | null;
+      status: string;
+      head_branch: string;
+      output?: { summary?: string | null; title?: string | null };
+    };
+  };
 };
 
 export const githubWebhookTask = task({
@@ -113,6 +138,8 @@ export const githubWebhookTask = task({
     const {
       handleBranchCreateWebhook,
       handleBranchDeleteWebhook,
+      handleCheckRunWebhook,
+      handlePullRequestWebhook,
       handlePushWebhook,
     } = await import("@/lib/github");
 
@@ -158,6 +185,14 @@ export const githubWebhookTask = task({
         ref: payload.ref,
         ref_type: payload.refType,
       });
+    }
+
+    if (payload.event === "pull_request" && payload.pullRequest) {
+      await handlePullRequestWebhook(payload.repositoryId, payload.pullRequest);
+    }
+
+    if (payload.event === "check_run" && payload.checkRun) {
+      await handleCheckRunWebhook(payload.repositoryId, payload.checkRun);
     }
 
     return { event: payload.event };

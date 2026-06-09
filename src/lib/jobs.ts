@@ -26,6 +26,8 @@ import { prisma } from "@/lib/prisma";
 import {
   handleBranchCreateWebhook,
   handleBranchDeleteWebhook,
+  handleCheckRunWebhook,
+  handlePullRequestWebhook,
   handlePushWebhook,
 } from "@/lib/github";
 
@@ -188,6 +190,13 @@ export async function enqueueGitHubWebhook(payload: GitHubWebhookPayload) {
       ref: payload.ref,
       ref_type: payload.refType,
     });
+  } else if (payload.event === "pull_request" && payload.pullRequest) {
+    await handlePullRequestWebhook(
+      payload.repositoryId,
+      payload.pullRequest
+    );
+  } else if (payload.event === "check_run" && payload.checkRun) {
+    await handleCheckRunWebhook(payload.repositoryId, payload.checkRun);
   }
 
   return null;

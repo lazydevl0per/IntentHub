@@ -69,6 +69,7 @@ model User {
   accounts           Account[]
   sessions           Session[]
   repositoryMembers  RepositoryMember[]
+  repositoryInvites  RepositoryInvite[]
   objectives         Objective[]        @relation("ObjectiveCreator")
   plans              Plan[]
   agentRuns          AgentRun[]
@@ -130,6 +131,10 @@ model Repository {
   objectives  Objective[]
   commits     GitCommit[]
   branches      GitBranch[]
+  pullRequests  GitPullRequest[]
+  tags          GitTag[]
+  invites       RepositoryInvite[]
+  deployments   Deployment[]
   chunks        DocumentChunk[]
   commitInsights CommitInsight[]
   chatSessions  ChatSession[]
@@ -168,6 +173,8 @@ model Objective {
   evaluations Evaluation[]
   decision    Decision?
   commitInsights CommitInsight[]
+  pullRequests GitPullRequest[]
+  deployments Deployment[]
   businessSummary    String? @db.Text
   technicalSummary   String? @db.Text
   risks              String? @db.Text
@@ -210,6 +217,9 @@ model AgentRun {
   promptTokens     Int?
   completionTokens Int?
   errorMessage     String?        @db.Text
+  pullRequestUrl String?
+  pullRequestNumber Int?
+  filesChanged   Int?
   createdById String
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -218,6 +228,7 @@ model AgentRun {
   plan        Plan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
   createdBy   User         @relation(fields: [createdById], references: [id])
   evaluations Evaluation[]
+  pullRequest GitPullRequest?
 
   @@index([objectiveId])
   @@index([planId])
@@ -327,6 +338,79 @@ model GitBranch {
   repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
   @@unique([repositoryId, name])
+}
+
+enum PullRequestState {
+  OPEN
+  CLOSED
+  MERGED
+}
+
+model GitPullRequest {
+  id           String           @id @default(cuid())
+  repositoryId String
+  githubId     Int
+  number       Int
+  title        String
+  state        PullRequestState
+  headBranch   String
+  baseBranch   String
+  htmlUrl      String
+  mergedAt     DateTime?
+  objectiveId  String?
+  agentRunId   String?          @unique
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  objective  Objective? @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  agentRun   AgentRun?  @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+  @@unique([repositoryId, number])
+  @@index([repositoryId, state])
+}
+
+model GitTag {
+  id           String   @id @default(cuid())
+  repositoryId String
+  name         String
+  sha          String
+  createdAt    DateTime @default(now())
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, name])
+}
+
+model RepositoryInvite {
+  id           String         @id @default(cuid())
+  repositoryId String
+  email        String
+  role         RepositoryRole @default(MEMBER)
+  token        String         @unique
+  invitedById  String
+  acceptedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  expiresAt    DateTime
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  invitedBy  User       @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, email])
+}
+
+model Deployment {
+  id           String   @id @default(cuid())
+  repositoryId String
+  environment  String
+  commitSha    String
+  deployedAt   DateTime @default(now())
+  objectiveId  String?
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  objective  Objective? @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+
+  @@index([repositoryId, deployedAt])
 }
 
 model DocumentChunk {

@@ -21,6 +21,7 @@ const nodeColors: Record<string, string> = {
   evaluation: "#f59e0b",
   decision: "#10b981",
   commit: "#6b7280",
+  deployment: "#0ea5e9",
 };
 
 function layoutNodes(
@@ -33,6 +34,7 @@ function layoutNodes(
     evaluation: 3,
     decision: 4,
     commit: 5,
+    deployment: 6,
   };
 
   const counts: Record<number, number> = {};
