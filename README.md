@@ -115,7 +115,8 @@ For local development, use [smee.io](https://smee.io) or ngrok to tunnel webhook
 - `GET/POST /api/repositories` — list/connect repositories
 - `GET/POST /api/repositories/[id]/objectives` — objectives CRUD
 - `POST /api/objectives/[id]/plans` — create plans
-- `POST /api/objectives/[id]/agent-runs` — record agent runs
+- `POST /api/objectives/[id]/agent-runs/execute` — run AI agent on a plan (creates branch + report)
+- `GET /api/agent-runs/[id]` — agent run status
 - `POST /api/objectives/[id]/evaluations` — record evaluations
 - `POST /api/objectives/[id]/decision` — record decision
 - `POST /api/repositories/[id]/chat` — RAG chat (streamed)

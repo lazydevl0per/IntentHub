@@ -9,6 +9,7 @@ import {
   EditPlanDialog,
 } from "@/components/objective-forms";
 import { ObjectiveSummary } from "@/components/objective-summary";
+import { RunAgentButton, RunAgentForm } from "@/components/run-agent-form";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -130,7 +131,12 @@ export default async function ObjectivePage({
                   <CardTitle className="text-lg">
                     Plan {String.fromCharCode(65 + index)}: {plan.title}
                   </CardTitle>
-                  <EditPlanDialog
+                  <div className="flex gap-2">
+                    <RunAgentButton
+                      objectiveId={objective.id}
+                      planId={plan.id}
+                    />
+                    <EditPlanDialog
                     plan={{
                       id: plan.id,
                       title: plan.title,
@@ -139,6 +145,7 @@ export default async function ObjectivePage({
                       status: plan.status,
                     }}
                   />
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <p>{plan.description}</p>
@@ -164,17 +171,34 @@ export default async function ObjectivePage({
                   </div>
                   <p className="text-sm text-zinc-500">
                     Model: {run.model ?? "—"} · Branch: {run.branchName ?? "—"}
+                    {(run.promptTokens ?? run.completionTokens) != null && (
+                      <>
+                        {" "}
+                        · Tokens: {run.promptTokens ?? 0}+{run.completionTokens ?? 0}
+                      </>
+                    )}
                   </p>
+                  {run.errorMessage && (
+                    <p className="text-sm text-red-600">{run.errorMessage}</p>
+                  )}
                   <p className="text-sm">
                     <span className="font-medium">Prompt:</span> {run.prompt}
                   </p>
-                  <p className="line-clamp-4 text-sm text-zinc-600 dark:text-zinc-400">
-                    {run.output}
-                  </p>
+                  {run.output ? (
+                    <p className="line-clamp-4 text-sm text-zinc-600 dark:text-zinc-400">
+                      {run.output}
+                    </p>
+                  ) : run.status === "PENDING" || run.status === "RUNNING" ? (
+                    <p className="text-sm text-zinc-500">Agent is working...</p>
+                  ) : null}
                 </CardContent>
               </Card>
             ))
           )}
+          <RunAgentForm
+            objectiveId={objective.id}
+            plans={objective.plans.map((p) => ({ id: p.id, title: p.title }))}
+          />
           <CreateAgentRunForm
             objectiveId={objective.id}
             plans={objective.plans.map((p) => ({ id: p.id, title: p.title }))}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AgentSystemPromptForm } from "@/components/agent-system-prompt-form";
 import { DisconnectRepositoryButton } from "@/components/disconnect-repo-button";
 import { SyncRepositoryButton } from "@/components/sync-repo-button";
 import { Button } from "@/components/ui/button";
@@ -100,6 +101,24 @@ export default async function RepositorySettingsPage({
               <p className="text-amber-700 dark:text-amber-400">
                 Reconnect the repository or ensure NEXT_PUBLIC_APP_URL is set
                 correctly for automatic webhook registration.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Agent Configuration</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {member.role === "OWNER" ? (
+              <AgentSystemPromptForm
+                repositoryId={repository.id}
+                initialPrompt={repository.agentSystemPrompt}
+              />
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Only repository owners can edit the agent system prompt.
               </p>
             )}
           </CardContent>
