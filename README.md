@@ -139,8 +139,21 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
    - Run migrations: `npx prisma migrate deploy`
 4. Set `NEXT_PUBLIC_APP_URL` to your production URL
 5. Update the GitHub OAuth callback to `https://<your-domain>/api/auth/callback/github`
-6. Verify health: `GET /api/health`
+6. Verify health: `GET /api/health` — expect `{ status: "ok", db: "connected", services: { ... } }`
 7. Deploy Trigger.dev tasks: `npm run deploy:trigger`
+8. Connect a repository, create an objective, and trigger **Reindex search** on the repository settings page
+9. Confirm GitHub webhooks arrive at `/api/webhooks/github` after a push
+
+### Production verification checklist
+
+| Check | How |
+|-------|-----|
+| Database | `GET /api/health` returns `db: "connected"` |
+| Background jobs | `services.trigger: true` in health response after setting `TRIGGER_SECRET_KEY` |
+| AI features | `services.openai: true` (or `anthropic: true`) in health response |
+| GitHub OAuth | Sign in with GitHub and connect a repository |
+| Search index | Use **Reindex search** on repository settings after connecting |
+| Webhooks | Push a commit; repository sync updates without manual sync |
 
 ## Pages
 
@@ -168,6 +181,7 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
 - `PATCH /api/repositories/[id]` — update settings (e.g. agent system prompt)
 - `DELETE /api/repositories/[id]` — disconnect or leave repository
 - `POST /api/repositories/[id]/sync` — manual sync (queued via Trigger.dev when configured)
+- `POST /api/repositories/[id]/reindex` — rebuild search indexes for the repository
 - `GET/POST /api/repositories/[id]/objectives` — list/create objectives
 - `GET/POST /api/repositories/[id]/chat` — list chat sessions / send message (streamed)
 - `GET /api/repositories/[id]/chat/sessions/[sessionId]` — load chat session messages
@@ -201,6 +215,6 @@ When `TRIGGER_SECRET_KEY` is set, these run asynchronously via Trigger.dev:
 | `analyze-commit` | After commit indexing |
 | `generate-objective-summary` | After decision recorded |
 | `execute-agent-run` | Agent execution requested |
-| `reindex-repository` | Full repository reindex |
+| `reindex-repository` | Manual reindex from repository settings |
 
 Without Trigger.dev, the same work runs inline in the API process (fine for local testing, not ideal for production).
