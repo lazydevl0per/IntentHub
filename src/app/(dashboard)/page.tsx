@@ -29,7 +29,7 @@ export default async function DashboardPage() {
         <ConnectRepoDialog demoMode={demoMode} />
       </div>
 
-      {!githubToken && <LinkGitHubBanner />}
+      {!githubToken && !demoMode && <LinkGitHubBanner />}
 
       <section className="grid gap-4 md:grid-cols-3">
         <Card>

@@ -71,8 +71,12 @@ export function KnowledgeGraphView({ objectiveId }: { objectiveId: string }) {
   const [loading, setLoading] = useState(true);
 
   const loadGraph = useCallback(async () => {
+    setLoading(true);
     const res = await fetch(`/api/objectives/${objectiveId}/graph`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      setLoading(false);
+      return;
+    }
 
     const data = await res.json();
     setNodes(layoutNodes(data.nodes));
