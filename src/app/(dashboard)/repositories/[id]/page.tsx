@@ -58,6 +58,9 @@ export default async function RepositoryPage({
           </p>
         </div>
         <div className="flex gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/repositories/${repository.id}/settings`}>Settings</Link>
+          </Button>
           <SyncRepositoryButton repositoryId={repository.id} />
           <CreateObjectiveDialog repositoryId={repository.id} />
         </div>
