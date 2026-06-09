@@ -3,7 +3,7 @@ import {
   getSessionUser,
   unauthorized,
 } from "@/lib/api";
-import { syncRepository } from "@/lib/github";
+import { syncRepository, registerRepositoryWebhook } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
 import { connectRepoSchema } from "@/lib/validations";
 import crypto from "crypto";
@@ -89,6 +89,20 @@ export async function POST(request: Request) {
 
   let syncStatus: "success" | "failed" = "success";
   let syncError: string | undefined;
+  let webhookStatus: "success" | "failed" | "skipped" = "skipped";
+  let webhookError: string | undefined;
+
+  try {
+    await registerRepositoryWebhook(repository.id, user.id);
+    webhookStatus = "success";
+  } catch (error) {
+    webhookStatus = "failed";
+    webhookError = error instanceof Error ? error.message : "Webhook registration failed";
+    console.error("[webhook] repository connect registration failed", {
+      repositoryId: repository.id,
+      error: webhookError,
+    });
+  }
 
   try {
     await syncRepository(repository.id);
@@ -114,7 +128,7 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(
-    { ...refreshed, syncStatus, syncError },
+    { ...refreshed, syncStatus, syncError, webhookStatus, webhookError },
     { status: 201 }
   );
 }

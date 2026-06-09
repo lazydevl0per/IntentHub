@@ -70,6 +70,13 @@ export function ConnectRepoDialog() {
       setError(
         `Repository connected but initial sync failed: ${data.syncError ?? "Unknown error"}. Use Sync on the repository page to retry.`
       );
+    } else if (data.webhookStatus === "failed") {
+      setError(
+        `Repository connected but webhook registration failed: ${data.webhookError ?? "Unknown error"}. Check Settings to configure manually.`
+      );
+    }
+
+    if (data.syncStatus === "failed" || data.webhookStatus === "failed") {
       setConnecting(null);
       setOpen(false);
       router.push(`/repositories/${data.id}`);

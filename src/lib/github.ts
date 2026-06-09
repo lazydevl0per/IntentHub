@@ -39,6 +39,102 @@ export async function listUserRepositories(userId: string) {
   }));
 }
 
+export async function registerRepositoryWebhook(
+  repositoryId: string,
+  userId: string
+) {
+  const repository = await prisma.repository.findUnique({
+    where: { id: repositoryId },
+  });
+
+  if (!repository) {
+    throw new Error("Repository not found");
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) {
+    throw new Error("NEXT_PUBLIC_APP_URL is not configured");
+  }
+
+  const token = await getUserGitHubToken(userId);
+  if (!token) {
+    throw new Error("GitHub token not found");
+  }
+
+  const octokit = createOctokit(token);
+  const [owner, repoName] = repository.fullName.split("/");
+
+  if (repository.githubWebhookId) {
+    try {
+      await octokit.repos.deleteWebhook({
+        owner,
+        repo: repoName,
+        hook_id: repository.githubWebhookId,
+      });
+    } catch (error) {
+      console.error("[webhook] failed to delete existing webhook", {
+        repositoryId,
+        hookId: repository.githubWebhookId,
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  }
+
+  const { data: hook } = await octokit.repos.createWebhook({
+    owner,
+    repo: repoName,
+    config: {
+      url: `${appUrl}/api/webhooks/github`,
+      content_type: "json",
+      secret: repository.webhookSecret ?? undefined,
+    },
+    events: ["push", "create", "delete"],
+    active: true,
+  });
+
+  await prisma.repository.update({
+    where: { id: repositoryId },
+    data: { githubWebhookId: hook.id },
+  });
+
+  return hook.id;
+}
+
+export async function deleteRepositoryWebhook(
+  repositoryId: string,
+  userId: string
+) {
+  const repository = await prisma.repository.findUnique({
+    where: { id: repositoryId },
+  });
+
+  if (!repository?.githubWebhookId) {
+    return;
+  }
+
+  const token = await getUserGitHubToken(userId);
+  if (!token) {
+    return;
+  }
+
+  const octokit = createOctokit(token);
+  const [owner, repoName] = repository.fullName.split("/");
+
+  try {
+    await octokit.repos.deleteWebhook({
+      owner,
+      repo: repoName,
+      hook_id: repository.githubWebhookId,
+    });
+  } catch (error) {
+    console.error("[webhook] failed to delete webhook on disconnect", {
+      repositoryId,
+      hookId: repository.githubWebhookId,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+}
+
 export async function syncRepository(repositoryId: string) {
   const repository = await prisma.repository.findUnique({
     where: { id: repositoryId },
@@ -67,13 +163,24 @@ export async function syncRepository(repositoryId: string) {
   const octokit = createOctokit(token);
   const [owner, name] = repository.fullName.split("/");
 
-  const branchesResponse = await octokit.repos.listBranches({
-    owner,
-    repo: name,
-    per_page: 100,
-  });
+  const branchLimit = Number(process.env.GITHUB_SYNC_BRANCH_LIMIT ?? 100);
+  const commitLimit = Number(process.env.GITHUB_SYNC_COMMIT_LIMIT ?? 500);
 
-  for (const branch of branchesResponse.data) {
+  const branches: Awaited<
+    ReturnType<typeof octokit.repos.listBranches>
+  >["data"] = [];
+
+  for await (const response of octokit.paginate.iterator(
+    octokit.repos.listBranches,
+    { owner, repo: name, per_page: 100 }
+  )) {
+    branches.push(...response.data);
+    if (branches.length >= branchLimit) {
+      break;
+    }
+  }
+
+  for (const branch of branches.slice(0, branchLimit)) {
     await prisma.gitBranch.upsert({
       where: {
         repositoryId_name: {
@@ -92,13 +199,21 @@ export async function syncRepository(repositoryId: string) {
     });
   }
 
-  const commitsResponse = await octokit.repos.listCommits({
-    owner,
-    repo: name,
-    per_page: 100,
-  });
+  const commits: Awaited<
+    ReturnType<typeof octokit.repos.listCommits>
+  >["data"] = [];
 
-  for (const commit of commitsResponse.data) {
+  for await (const response of octokit.paginate.iterator(
+    octokit.repos.listCommits,
+    { owner, repo: name, per_page: 100 }
+  )) {
+    commits.push(...response.data);
+    if (commits.length >= commitLimit) {
+      break;
+    }
+  }
+
+  for (const commit of commits.slice(0, commitLimit)) {
     const message = commit.commit.message;
     const author =
       commit.commit.author?.name ??

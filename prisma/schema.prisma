@@ -119,6 +119,7 @@ model Repository {
   fullName       String
   defaultBranch  String    @default("main")
   webhookSecret  String?
+  githubWebhookId Int?
   lastSyncedAt   DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
