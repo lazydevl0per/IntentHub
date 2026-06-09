@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# IntentHub
 
-## Getting Started
+Git versions code. IntentHub versions decisions.
 
-First, run the development server:
+IntentHub is an AI-native collaboration layer on top of Git that preserves objectives, plans, agent runs, evaluations, and decision records.
+
+## Stack
+
+- Next.js 15 (App Router)
+- TypeScript, Tailwind CSS, shadcn/ui-style components
+- PostgreSQL + Prisma
+- NextAuth (credentials + GitHub OAuth)
+- OpenAI (RAG chat + embeddings)
+- GitHub API + webhooks
+
+## Local Setup
+
+### 1. Start PostgreSQL
+
+```bash
+docker compose up -d
+```
+
+Uses `pgvector/pgvector:pg16` on port 5432.
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Fill in:
+
+- `AUTH_SECRET` — run `openssl rand -base64 32`
+- `GITHUB_ID` / `GITHUB_SECRET` — GitHub OAuth app credentials
+- `OPENAI_API_KEY` — for repository chat
+- `GITHUB_WEBHOOK_SECRET` — for webhook signature verification
+
+### 3. Install and migrate
+
+```bash
+npm install
+npm run db:migrate
+npm run db:seed
+```
+
+### 4. Run dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Demo account after seeding: `demo@intenthub.dev` / `password123`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## GitHub OAuth App
 
-## Learn More
+1. Create a GitHub OAuth App
+2. Set callback URL to `http://localhost:3000/api/auth/callback/github`
+3. Request scopes: `read:user`, `user:email`, `repo`
 
-To learn more about Next.js, take a look at the following resources:
+## Webhooks (optional)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Point GitHub webhooks to:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+POST /api/webhooks/github
+```
 
-## Deploy on Vercel
+Events: `push`, `create`, `delete`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+For local development, use [smee.io](https://smee.io) or ngrok to tunnel webhooks.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deploy to Vercel
+
+1. Push to GitHub
+2. Import project in Vercel
+3. Add environment variables from `.env.example`
+4. Use Neon or Supabase PostgreSQL with `pgvector` enabled
+5. Set `NEXT_PUBLIC_APP_URL` to your production URL
+
+## Pages
+
+| Route | Description |
+|-------|-------------|
+| `/` | Dashboard |
+| `/repositories/[id]` | Repository objectives, commits, chat |
+| `/objectives/[id]` | Plans, runs, evaluations, decision |
+| `/knowledge-graph/[objectiveId]` | Interactive knowledge graph |
+
+## API Overview
+
+- `POST /api/auth/register` — email/password registration
+- `GET/POST /api/repositories` — list/connect repositories
+- `GET/POST /api/repositories/[id]/objectives` — objectives CRUD
+- `POST /api/objectives/[id]/plans` — create plans
+- `POST /api/objectives/[id]/agent-runs` — record agent runs
+- `POST /api/objectives/[id]/evaluations` — record evaluations
+- `POST /api/objectives/[id]/decision` — record decision
+- `POST /api/repositories/[id]/chat` — RAG chat (streamed)
+- `POST /api/webhooks/github` — GitHub webhook handler
