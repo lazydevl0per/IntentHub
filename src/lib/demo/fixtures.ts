@@ -8,7 +8,10 @@ export const DEMO_OBJECTIVE_COMPLETED_ID = "seed-objective-1";
 export const DEMO_OBJECTIVE_ACTIVE_ID = "demo-objective-2";
 export const DEMO_PLAN_A_ID = "demo-plan-a";
 export const DEMO_PLAN_B_ID = "demo-plan-b";
+export const DEMO_PLAN_STRIPE_A_ID = "demo-plan-stripe-a";
+export const DEMO_PLAN_STRIPE_B_ID = "demo-plan-stripe-b";
 export const DEMO_AGENT_RUN_ID = "demo-agent-run-1";
+export const DEMO_AGENT_RUN_STRIPE_ID = "demo-agent-run-stripe-1";
 export const DEMO_EVALUATION_ID = "demo-evaluation-1";
 export const DEMO_DECISION_ID = "demo-decision-1";
 export const DEMO_COMMIT_ID = "demo-commit-1";
@@ -137,6 +140,32 @@ const demoPlanB = {
   updatedAt: now,
 };
 
+const demoPlanStripeA = {
+  id: DEMO_PLAN_STRIPE_A_ID,
+  objectiveId: DEMO_OBJECTIVE_ACTIVE_ID,
+  title: "Stripe Checkout integration",
+  description: "Use Stripe Checkout hosted pages for subscription signup.",
+  approach:
+    "Add Stripe Checkout session creation, customer portal, and webhook handlers for subscription events.",
+  status: "ACTIVE" as const,
+  createdById: DEMO_USER_ID,
+  createdAt: now,
+  updatedAt: now,
+};
+
+const demoPlanStripeB = {
+  id: DEMO_PLAN_STRIPE_B_ID,
+  objectiveId: DEMO_OBJECTIVE_ACTIVE_ID,
+  title: "Custom billing UI",
+  description: "Build in-app subscription management with Stripe Elements.",
+  approach:
+    "Embed Stripe Elements for payment collection and manage subscriptions via Stripe API directly.",
+  status: "DRAFT" as const,
+  createdById: DEMO_USER_ID,
+  createdAt: now,
+  updatedAt: now,
+};
+
 const demoAgentRun = {
   id: DEMO_AGENT_RUN_ID,
   objectiveId: DEMO_OBJECTIVE_COMPLETED_ID,
@@ -152,6 +181,25 @@ const demoAgentRun = {
   errorMessage: null,
   createdById: DEMO_USER_ID,
   createdAt: weekAgo,
+  updatedAt: now,
+};
+
+const demoAgentRunStripe = {
+  id: DEMO_AGENT_RUN_STRIPE_ID,
+  objectiveId: DEMO_OBJECTIVE_ACTIVE_ID,
+  planId: DEMO_PLAN_STRIPE_A_ID,
+  agentName: "IntentHub Agent",
+  model: "gpt-4o-mini",
+  prompt: "Scaffold Stripe Checkout integration with webhook handlers",
+  output:
+    "Created checkout session API route, webhook endpoint for subscription events, and customer portal link generation.",
+  branchName: "feat/stripe-checkout",
+  status: "COMPLETED" as const,
+  promptTokens: 980,
+  completionTokens: 620,
+  errorMessage: null,
+  createdById: DEMO_USER_ID,
+  createdAt: now,
   updatedAt: now,
 };
 
@@ -279,10 +327,16 @@ export function getDemoObjectivePageData(objectiveId: string) {
   const plans =
     objectiveId === DEMO_OBJECTIVE_COMPLETED_ID
       ? [demoPlanA, demoPlanB]
-      : [];
+      : objectiveId === DEMO_OBJECTIVE_ACTIVE_ID
+        ? [demoPlanStripeA, demoPlanStripeB]
+        : [];
 
   const agentRuns =
-    objectiveId === DEMO_OBJECTIVE_COMPLETED_ID ? [demoAgentRun] : [];
+    objectiveId === DEMO_OBJECTIVE_COMPLETED_ID
+      ? [demoAgentRun]
+      : objectiveId === DEMO_OBJECTIVE_ACTIVE_ID
+        ? [demoAgentRunStripe]
+        : [];
 
   const evaluations =
     objectiveId === DEMO_OBJECTIVE_COMPLETED_ID ? [demoEvaluation] : [];
@@ -318,7 +372,12 @@ export function getDemoObjectivePageData(objectiveId: string) {
     })),
     agentRuns: agentRuns.map((run) => ({
       ...run,
-      plan: demoPlanA,
+      plan:
+        run.planId === DEMO_PLAN_A_ID
+          ? demoPlanA
+          : run.planId === DEMO_PLAN_STRIPE_A_ID
+            ? demoPlanStripeA
+            : null,
       createdBy: { name: demoUser.name },
     })),
     evaluations: evaluations.map((evaluation) => ({
@@ -339,8 +398,18 @@ export function getDemoObjectiveAccess(objectiveId: string, userId: string) {
 }
 
 export function getDemoGraphData(objectiveId: string) {
-  if (objectiveId !== DEMO_OBJECTIVE_COMPLETED_ID) return null;
+  if (objectiveId === DEMO_OBJECTIVE_COMPLETED_ID) {
+    return buildCompletedObjectiveGraph();
+  }
 
+  if (objectiveId === DEMO_OBJECTIVE_ACTIVE_ID) {
+    return buildActiveObjectiveGraph();
+  }
+
+  return null;
+}
+
+function buildCompletedObjectiveGraph() {
   const nodes: Array<{
     id: string;
     type: string;
@@ -416,6 +485,51 @@ export function getDemoGraphData(objectiveId: string) {
     id: `edge-decision-commit-${demoCommit.id}`,
     source: `decision-${demoDecision.id}`,
     target: `commit-${demoCommit.id}`,
+  });
+
+  return { nodes, edges };
+}
+
+function buildActiveObjectiveGraph() {
+  const nodes: Array<{
+    id: string;
+    type: string;
+    label: string;
+    data?: Record<string, unknown>;
+  }> = [];
+  const edges: Array<{ id: string; source: string; target: string }> = [];
+
+  nodes.push({
+    id: `objective-${demoObjectiveActive.id}`,
+    type: "objective",
+    label: demoObjectiveActive.title,
+    data: { status: demoObjectiveActive.status },
+  });
+
+  for (const plan of [demoPlanStripeA, demoPlanStripeB]) {
+    nodes.push({
+      id: `plan-${plan.id}`,
+      type: "plan",
+      label: plan.title,
+      data: { status: plan.status },
+    });
+    edges.push({
+      id: `edge-objective-plan-${plan.id}`,
+      source: `objective-${demoObjectiveActive.id}`,
+      target: `plan-${plan.id}`,
+    });
+  }
+
+  nodes.push({
+    id: `run-${demoAgentRunStripe.id}`,
+    type: "agentRun",
+    label: demoAgentRunStripe.agentName,
+    data: { status: demoAgentRunStripe.status, model: demoAgentRunStripe.model },
+  });
+  edges.push({
+    id: `edge-run-${demoAgentRunStripe.id}`,
+    source: `plan-${demoPlanStripeA.id}`,
+    target: `run-${demoAgentRunStripe.id}`,
   });
 
   return { nodes, edges };
