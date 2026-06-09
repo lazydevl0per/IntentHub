@@ -382,3 +382,39 @@ export async function handleBranchDeleteWebhook(
     },
   });
 }
+
+export async function getCommitStats(repositoryId: string, sha: string) {
+  const repository = await prisma.repository.findUnique({
+    where: { id: repositoryId },
+    include: {
+      members: {
+        where: { role: "OWNER" },
+        take: 1,
+      },
+    },
+  });
+
+  if (!repository?.members[0]) {
+    return null;
+  }
+
+  const token = await getUserGitHubToken(repository.members[0].userId);
+  if (!token) {
+    return null;
+  }
+
+  const octokit = createOctokit(token);
+  const [owner, repo] = repository.fullName.split("/");
+
+  const { data } = await octokit.repos.getCommit({
+    owner,
+    repo,
+    ref: sha,
+  });
+
+  return {
+    additions: data.stats?.additions ?? 0,
+    deletions: data.stats?.deletions ?? 0,
+    filesChanged: data.files?.length ?? 0,
+  };
+}

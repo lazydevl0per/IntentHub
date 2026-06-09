@@ -9,11 +9,28 @@ export async function indexObjective(objectiveId: string) {
 
   if (!objective) return;
 
+  const parts = [
+    `${objective.title}\n${objective.description}`,
+  ];
+
+  if (objective.businessSummary) {
+    parts.push(`Business Summary: ${objective.businessSummary}`);
+  }
+  if (objective.technicalSummary) {
+    parts.push(`Technical Summary: ${objective.technicalSummary}`);
+  }
+  if (objective.risks) {
+    parts.push(`Risks: ${objective.risks}`);
+  }
+  if (objective.architectureImpact) {
+    parts.push(`Architecture Impact: ${objective.architectureImpact}`);
+  }
+
   await indexEntityContent({
     repositoryId: objective.repositoryId,
     entityType: DocumentEntityType.OBJECTIVE,
     entityId: objective.id,
-    content: `${objective.title}\n${objective.description}`,
+    content: parts.join("\n"),
   });
 }
 
@@ -96,10 +113,25 @@ export async function indexCommit(repositoryId: string, sha: string) {
 
   if (!commit) return;
 
+  const insight = await prisma.commitInsight.findUnique({
+    where: {
+      repositoryId_sha: { repositoryId, sha },
+    },
+  });
+
+  const parts = [`Commit ${commit.sha} by ${commit.author}: ${commit.message}`];
+
+  if (insight) {
+    parts.push(`Intent: ${insight.intent}`);
+    if (insight.archImpact) parts.push(`Architectural Impact: ${insight.archImpact}`);
+    if (insight.perfImpact) parts.push(`Performance Impact: ${insight.perfImpact}`);
+    if (insight.testStatus) parts.push(`Tests: ${insight.testStatus}`);
+  }
+
   await indexEntityContent({
     repositoryId,
     entityType: DocumentEntityType.COMMIT,
     entityId: commit.id,
-    content: `Commit ${commit.sha} by ${commit.author}: ${commit.message}`,
+    content: parts.join("\n"),
   });
 }
