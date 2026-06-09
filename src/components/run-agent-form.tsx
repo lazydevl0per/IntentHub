@@ -14,9 +14,11 @@ import {
 export function RunAgentForm({
   objectiveId,
   plans,
+  demoMode,
 }: {
   objectiveId: string;
   plans: Array<{ id: string; title: string }>;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [planId, setPlanId] = useState("");
@@ -50,7 +52,7 @@ export function RunAgentForm({
     router.refresh();
   }
 
-  if (plans.length === 0) {
+  if (plans.length === 0 || demoMode) {
     return null;
   }
 
@@ -97,9 +99,11 @@ export function RunAgentForm({
 export function RunAgentButton({
   objectiveId,
   planId,
+  demoMode,
 }: {
   objectiveId: string;
   planId: string;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -123,7 +127,8 @@ export function RunAgentButton({
       variant="outline"
       size="sm"
       onClick={handleRun}
-      disabled={loading}
+      disabled={loading || demoMode}
+      title={demoMode ? "Demo mode — read only" : undefined}
     >
       {loading ? "Starting..." : "Run Agent"}
     </Button>

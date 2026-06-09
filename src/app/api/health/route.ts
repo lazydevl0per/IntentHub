@@ -1,7 +1,12 @@
+import { isDemoMode } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  if (isDemoMode()) {
+    return NextResponse.json({ status: "ok", mode: "demo" });
+  }
+
   try {
     await prisma.$queryRaw`SELECT 1`;
     return NextResponse.json({ status: "ok", db: "connected" });

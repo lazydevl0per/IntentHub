@@ -14,8 +14,9 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getObjectivePageData } from "@/lib/data/objective";
+import { isDemoMode } from "@/lib/demo";
+import { getAppSession } from "@/lib/session";
 import { Network } from "lucide-react";
 
 export default async function ObjectivePage({
@@ -23,53 +24,14 @@ export default async function ObjectivePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
+  const session = await getAppSession();
   const userId = session!.user!.id;
   const { id } = await params;
+  const demoMode = isDemoMode();
 
-  const objective = await prisma.objective.findUnique({
-    where: { id },
-    include: {
-      creator: { select: { name: true } },
-      repository: {
-        include: {
-          members: { where: { userId } },
-          commits: { orderBy: { committedAt: "desc" }, take: 30 },
-        },
-      },
-      plans: {
-        include: {
-          createdBy: { select: { name: true } },
-        },
-        orderBy: { createdAt: "asc" },
-      },
-      agentRuns: {
-        include: {
-          plan: true,
-          createdBy: { select: { name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-      evaluations: {
-        include: {
-          plan: true,
-          agentRun: true,
-          createdBy: { select: { name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-      decision: {
-        include: {
-          selectedPlan: true,
-          approvedBy: { select: { name: true, email: true } },
-        },
-      },
-    },
-  });
+  const objective = await getObjectivePageData(id, userId);
 
-  if (!objective || objective.repository.members.length === 0) {
-    notFound();
-  }
+  if (!objective) notFound();
 
   return (
     <div className="space-y-8">
@@ -101,6 +63,7 @@ export default async function ObjectivePage({
               status: objective.status,
               priority: objective.priority,
             }}
+            demoMode={demoMode}
           />
           <Button asChild variant="outline">
             <Link href={`/knowledge-graph/${objective.id}`}>
@@ -135,16 +98,18 @@ export default async function ObjectivePage({
                     <RunAgentButton
                       objectiveId={objective.id}
                       planId={plan.id}
+                      demoMode={demoMode}
                     />
                     <EditPlanDialog
-                    plan={{
-                      id: plan.id,
-                      title: plan.title,
-                      description: plan.description,
-                      approach: plan.approach,
-                      status: plan.status,
-                    }}
-                  />
+                      plan={{
+                        id: plan.id,
+                        title: plan.title,
+                        description: plan.description,
+                        approach: plan.approach,
+                        status: plan.status,
+                      }}
+                      demoMode={demoMode}
+                    />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
@@ -155,7 +120,7 @@ export default async function ObjectivePage({
               </Card>
             ))}
           </div>
-          <CreatePlanForm objectiveId={objective.id} />
+          <CreatePlanForm objectiveId={objective.id} demoMode={demoMode} />
         </TabsContent>
 
         <TabsContent value="runs" className="space-y-4">
@@ -198,10 +163,12 @@ export default async function ObjectivePage({
           <RunAgentForm
             objectiveId={objective.id}
             plans={objective.plans.map((p) => ({ id: p.id, title: p.title }))}
+            demoMode={demoMode}
           />
           <CreateAgentRunForm
             objectiveId={objective.id}
             plans={objective.plans.map((p) => ({ id: p.id, title: p.title }))}
+            demoMode={demoMode}
           />
         </TabsContent>
 
@@ -231,6 +198,7 @@ export default async function ObjectivePage({
               id: r.id,
               agentName: r.agentName,
             }))}
+            demoMode={demoMode}
           />
         </TabsContent>
 
@@ -268,6 +236,7 @@ export default async function ObjectivePage({
               sha: c.sha,
               message: c.message,
             }))}
+            demoMode={demoMode}
           />
         </TabsContent>
       </Tabs>

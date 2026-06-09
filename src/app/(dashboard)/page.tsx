@@ -4,63 +4,18 @@ import { EmptyState } from "@/components/app-shell";
 import { LinkGitHubBanner } from "@/components/link-github-banner";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { auth } from "@/lib/auth";
-import { getUserGitHubToken } from "@/lib/github";
-import { prisma } from "@/lib/prisma";
+import { getDashboardData } from "@/lib/data/dashboard";
+import { isDemoMode } from "@/lib/demo";
+import { getAppSession } from "@/lib/session";
 import { GitBranch, Target } from "lucide-react";
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const session = await getAppSession();
   const userId = session!.user!.id;
+  const demoMode = isDemoMode();
 
-  const [repositories, activeObjectives, recentDecisions, githubToken] =
-    await Promise.all([
-    prisma.repository.findMany({
-      where: {
-        members: { some: { userId } },
-      },
-      include: {
-        _count: {
-          select: { objectives: true, commits: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.objective.findMany({
-      where: {
-        status: "ACTIVE",
-        repository: {
-          members: { some: { userId } },
-        },
-      },
-      include: {
-        repository: true,
-      },
-      take: 8,
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.decision.findMany({
-      where: {
-        objective: {
-          repository: {
-            members: { some: { userId } },
-          },
-        },
-      },
-      include: {
-        objective: {
-          include: { repository: true },
-        },
-        selectedPlan: true,
-        approvedBy: {
-          select: { name: true },
-        },
-      },
-      take: 6,
-      orderBy: { approvedAt: "desc" },
-    }),
-    getUserGitHubToken(userId),
-  ]);
+  const { repositories, activeObjectives, recentDecisions, githubToken } =
+    await getDashboardData(userId);
 
   return (
     <div className="space-y-8">
@@ -71,7 +26,7 @@ export default async function DashboardPage() {
             Objectives, decisions, and repository knowledge at a glance.
           </p>
         </div>
-        <ConnectRepoDialog />
+        <ConnectRepoDialog demoMode={demoMode} />
       </div>
 
       {!githubToken && <LinkGitHubBanner />}

@@ -21,7 +21,7 @@ type GitHubRepo = {
   private: boolean;
 };
 
-export function ConnectRepoDialog() {
+export function ConnectRepoDialog({ demoMode }: { demoMode?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
@@ -90,6 +90,14 @@ export function ConnectRepoDialog() {
     setConnecting(null);
     router.push(`/repositories/${data.id}`);
     router.refresh();
+  }
+
+  if (demoMode) {
+    return (
+      <Button disabled title="Demo mode — read only">
+        Connect Repository
+      </Button>
+    );
   }
 
   return (

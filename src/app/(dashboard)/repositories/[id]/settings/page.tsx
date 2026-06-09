@@ -5,8 +5,9 @@ import { DisconnectRepositoryButton } from "@/components/disconnect-repo-button"
 import { SyncRepositoryButton } from "@/components/sync-repo-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getRepositorySettingsData } from "@/lib/data/repository";
+import { isDemoMode } from "@/lib/demo";
+import { getAppSession } from "@/lib/session";
 import { Settings } from "lucide-react";
 
 export default async function RepositorySettingsPage({
@@ -14,29 +15,16 @@ export default async function RepositorySettingsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
+  const session = await getAppSession();
   const userId = session!.user!.id;
   const { id } = await params;
+  const demoMode = isDemoMode();
 
-  const member = await prisma.repositoryMember.findUnique({
-    where: {
-      userId_repositoryId: { userId, repositoryId: id },
-    },
-  });
+  const data = await getRepositorySettingsData(id, userId);
 
-  if (!member) notFound();
+  if (!data) notFound();
 
-  const repository = await prisma.repository.findUnique({
-    where: { id },
-    include: {
-      branches: {
-        orderBy: { name: "asc" },
-      },
-    },
-  });
-
-  if (!repository) notFound();
-
+  const { repository, member } = data;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   return (
@@ -70,7 +58,7 @@ export default async function RepositorySettingsPage({
                 ? repository.lastSyncedAt.toLocaleString()
                 : "never"}
             </p>
-            <SyncRepositoryButton repositoryId={repository.id} />
+            <SyncRepositoryButton repositoryId={repository.id} demoMode={demoMode} />
           </CardContent>
         </Card>
 
@@ -115,6 +103,7 @@ export default async function RepositorySettingsPage({
               <AgentSystemPromptForm
                 repositoryId={repository.id}
                 initialPrompt={repository.agentSystemPrompt}
+                demoMode={demoMode}
               />
             ) : (
               <p className="text-sm text-zinc-500">
@@ -159,6 +148,7 @@ export default async function RepositorySettingsPage({
             <DisconnectRepositoryButton
               repositoryId={repository.id}
               isOwner={member.role === "OWNER"}
+              demoMode={demoMode}
             />
           </CardContent>
         </Card>

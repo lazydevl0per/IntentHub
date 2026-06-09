@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 export function DisconnectRepositoryButton({
   repositoryId,
   isOwner,
+  demoMode,
 }: {
   repositoryId: string;
   isOwner: boolean;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -42,7 +44,8 @@ export function DisconnectRepositoryButton({
       variant="outline"
       className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
       onClick={handleDisconnect}
-      disabled={loading}
+      disabled={loading || demoMode}
+      title={demoMode ? "Demo mode — read only" : undefined}
     >
       {loading ? "Disconnecting..." : isOwner ? "Disconnect Repository" : "Leave Repository"}
     </Button>

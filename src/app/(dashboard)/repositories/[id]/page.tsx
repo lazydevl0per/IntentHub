@@ -5,8 +5,9 @@ import { RepoChat } from "@/components/repo-chat";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getRepositoryPageData } from "@/lib/data/repository";
+import { isDemoMode } from "@/lib/demo";
+import { getAppSession } from "@/lib/session";
 import { SyncRepositoryButton } from "@/components/sync-repo-button";
 
 export default async function RepositoryPage({
@@ -14,37 +15,12 @@ export default async function RepositoryPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
+  const session = await getAppSession();
   const userId = session!.user!.id;
   const { id } = await params;
+  const demoMode = isDemoMode();
 
-  const member = await prisma.repositoryMember.findUnique({
-    where: {
-      userId_repositoryId: { userId, repositoryId: id },
-    },
-  });
-
-  if (!member) notFound();
-
-  const repository = await prisma.repository.findUnique({
-    where: { id },
-    include: {
-      objectives: {
-        orderBy: { updatedAt: "desc" },
-      },
-      commits: {
-        orderBy: { committedAt: "desc" },
-        take: 15,
-      },
-      commitInsights: {
-        orderBy: { createdAt: "desc" },
-        take: 15,
-      },
-      branches: {
-        orderBy: { name: "asc" },
-      },
-    },
-  });
+  const repository = await getRepositoryPageData(id, userId);
 
   if (!repository) notFound();
 
@@ -65,8 +41,8 @@ export default async function RepositoryPage({
           <Button asChild variant="outline" size="sm">
             <Link href={`/repositories/${repository.id}/settings`}>Settings</Link>
           </Button>
-          <SyncRepositoryButton repositoryId={repository.id} />
-          <CreateObjectiveDialog repositoryId={repository.id} />
+          <SyncRepositoryButton repositoryId={repository.id} demoMode={demoMode} />
+          <CreateObjectiveDialog repositoryId={repository.id} demoMode={demoMode} />
         </div>
       </div>
 
@@ -159,7 +135,7 @@ export default async function RepositoryPage({
         </div>
 
         <div>
-          <RepoChat repositoryId={repository.id} />
+          <RepoChat repositoryId={repository.id} demoMode={demoMode} />
         </div>
       </div>
     </div>

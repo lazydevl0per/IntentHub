@@ -1,17 +1,23 @@
 import Link from "next/link";
-import { GitBranch, LayoutDashboard, LogOut, Target } from "lucide-react";
-import { signOut } from "@/lib/auth";
+import { GitBranch, LayoutDashboard, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function AppShell({
   children,
   userName,
+  demoMode,
 }: {
   children: React.ReactNode;
   userName?: string | null;
+  demoMode?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      {demoMode && (
+        <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-center text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          Demo Mode — browsing sample data. No database or authentication required.
+        </div>
+      )}
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-8">
@@ -28,17 +34,23 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-zinc-500">{userName}</span>
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/login" });
-              }}
-            >
-              <Button type="submit" variant="ghost" size="sm">
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out
-              </Button>
-            </form>
+            {demoMode ? (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                Demo
+              </span>
+            ) : (
+              <form
+                action={async () => {
+                  "use server";
+                  const { signOut } = await import("@/lib/auth");
+                  await signOut({ redirectTo: "/login" });
+                }}
+              >
+                <Button type="submit" variant="ghost" size="sm">
+                  Sign out
+                </Button>
+              </form>
+            )}
           </div>
         </div>
       </header>

@@ -1,10 +1,13 @@
 import {
+  demoReadonly,
   getSessionUser,
   notFound,
   requireRepoAccess,
   unauthorized,
 } from "@/lib/api";
 import { streamRepositoryChat } from "@/lib/ai/rag";
+import { getDemoChatSessions } from "@/lib/demo/fixtures";
+import { isDemoMode } from "@/lib/demo";
 import { chatSchema } from "@/lib/validations";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -19,6 +22,10 @@ export async function GET(
   const { id } = await params;
   const member = await requireRepoAccess(id, user.id);
   if (!member) return notFound();
+
+  if (isDemoMode()) {
+    return NextResponse.json(getDemoChatSessions(id));
+  }
 
   const sessions = await prisma.chatSession.findMany({
     where: { repositoryId: id, userId: user.id },
@@ -36,6 +43,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const readonly = demoReadonly();
+  if (readonly) return readonly;
+
   const user = await getSessionUser();
   if (!user) return unauthorized();
 

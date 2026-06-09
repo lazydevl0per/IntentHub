@@ -27,6 +27,27 @@ IntentHub is an AI-native collaboration layer on top of Git. It preserves object
 - GitHub API + webhooks
 - Trigger.dev (background sync, indexing, webhooks, AI jobs, agent execution)
 
+## Demo Mode
+
+Browse the UI without Docker, PostgreSQL, or authentication:
+
+```bash
+npm install
+npm run dev:demo
+```
+
+Open [http://localhost:3000](http://localhost:3000). Sample data is pre-loaded — write actions (connect repo, sync, forms, chat send) are disabled.
+
+| Route | Description |
+|-------|-------------|
+| `/` | Dashboard with repo, active objective, recent decision |
+| `/repositories/demo-repo` | Objectives, commits with insights, RAG chat (read-only) |
+| `/repositories/demo-repo/settings` | Sync, webhook, branches, agent config |
+| `/objectives/seed-objective-1` | Completed objective with plans, runs, evaluation, decision |
+| `/knowledge-graph/seed-objective-1` | Interactive knowledge graph |
+
+For full functionality, use the [Local Setup](#local-setup) below.
+
 ## Local Setup
 
 ### 1. Start PostgreSQL

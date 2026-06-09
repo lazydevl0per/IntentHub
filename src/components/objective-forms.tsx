@@ -23,8 +23,10 @@ import {
 
 export function CreateObjectiveDialog({
   repositoryId,
+  demoMode,
 }: {
   repositoryId: string;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -56,6 +58,14 @@ export function CreateObjectiveDialog({
     }
 
     setLoading(false);
+  }
+
+  if (demoMode) {
+    return (
+      <Button disabled title="Demo mode — read only">
+        New Objective
+      </Button>
+    );
   }
 
   return (
@@ -99,7 +109,13 @@ export function CreateObjectiveDialog({
   );
 }
 
-export function CreatePlanForm({ objectiveId }: { objectiveId: string }) {
+export function CreatePlanForm({
+  objectiveId,
+  demoMode,
+}: {
+  objectiveId: string;
+  demoMode?: boolean;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -123,6 +139,8 @@ export function CreatePlanForm({ objectiveId }: { objectiveId: string }) {
     router.refresh();
   }
 
+  if (demoMode) return null;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <h4 className="font-medium">Add Plan</h4>
@@ -139,9 +157,11 @@ export function CreatePlanForm({ objectiveId }: { objectiveId: string }) {
 export function CreateAgentRunForm({
   objectiveId,
   plans,
+  demoMode,
 }: {
   objectiveId: string;
   plans: Array<{ id: string; title: string }>;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [planId, setPlanId] = useState("");
@@ -174,6 +194,8 @@ export function CreateAgentRunForm({
     setLoading(false);
     router.refresh();
   }
+
+  if (demoMode) return null;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -217,10 +239,12 @@ export function CreateEvaluationForm({
   objectiveId,
   plans,
   agentRuns,
+  demoMode,
 }: {
   objectiveId: string;
   plans: Array<{ id: string; title: string }>;
   agentRuns: Array<{ id: string; agentName: string }>;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [type, setType] = useState("TEST");
@@ -250,6 +274,8 @@ export function CreateEvaluationForm({
     setLoading(false);
     router.refresh();
   }
+
+  if (demoMode) return null;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -302,10 +328,12 @@ export function CreateDecisionForm({
   objectiveId,
   plans,
   commits,
+  demoMode,
 }: {
   objectiveId: string;
   plans: Array<{ id: string; title: string }>;
   commits: Array<{ sha: string; message: string }>;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -330,6 +358,8 @@ export function CreateDecisionForm({
     setLoading(false);
     router.refresh();
   }
+
+  if (demoMode) return null;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -368,6 +398,7 @@ export function CreateDecisionForm({
 
 export function EditObjectiveDialog({
   objective,
+  demoMode,
 }: {
   objective: {
     id: string;
@@ -376,6 +407,7 @@ export function EditObjectiveDialog({
     status: string;
     priority: string;
   };
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -420,6 +452,14 @@ export function EditObjectiveDialog({
     }
 
     setLoading(false);
+  }
+
+  if (demoMode) {
+    return (
+      <Button variant="outline" size="sm" disabled title="Demo mode — read only">
+        Edit Objective
+      </Button>
+    );
   }
 
   return (
@@ -492,6 +532,7 @@ export function EditObjectiveDialog({
 
 export function EditPlanDialog({
   plan,
+  demoMode,
 }: {
   plan: {
     id: string;
@@ -500,6 +541,7 @@ export function EditPlanDialog({
     approach: string;
     status: string;
   };
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -544,6 +586,14 @@ export function EditPlanDialog({
     }
 
     setLoading(false);
+  }
+
+  if (demoMode) {
+    return (
+      <Button variant="ghost" size="sm" disabled title="Demo mode — read only">
+        Edit
+      </Button>
+    );
   }
 
   return (

@@ -4,6 +4,8 @@ import {
   requireObjectiveAccess,
   unauthorized,
 } from "@/lib/api";
+import { getDemoGraphData } from "@/lib/demo/fixtures";
+import { isDemoMode } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -17,6 +19,12 @@ export async function GET(
   const { id } = await params;
   const access = await requireObjectiveAccess(id, user.id);
   if (!access) return notFound();
+
+  if (isDemoMode()) {
+    const graph = getDemoGraphData(id);
+    if (!graph) return notFound();
+    return NextResponse.json(graph);
+  }
 
   const objective = await prisma.objective.findUnique({
     where: { id },

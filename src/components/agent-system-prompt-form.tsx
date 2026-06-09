@@ -8,9 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 export function AgentSystemPromptForm({
   repositoryId,
   initialPrompt,
+  demoMode,
 }: {
   repositoryId: string;
   initialPrompt: string | null;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
@@ -44,9 +46,10 @@ export function AgentSystemPromptForm({
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="Custom system prompt for AI agents on this repository..."
         rows={6}
+        disabled={demoMode}
       />
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={loading} size="sm">
+        <Button onClick={handleSave} disabled={loading || demoMode} size="sm">
           {loading ? "Saving..." : "Save prompt"}
         </Button>
         {saved && (

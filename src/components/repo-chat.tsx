@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DemoReadonlyNotice } from "@/components/demo-readonly";
 
 type Message = {
   role: "user" | "assistant";
@@ -24,19 +25,18 @@ const suggestions = [
   "Which objectives are still active?",
 ];
 
-export function RepoChat({ repositoryId }: { repositoryId: string }) {
+export function RepoChat({
+  repositoryId,
+  demoMode,
+}: {
+  repositoryId: string;
+  demoMode?: boolean;
+}) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/repositories/${repositoryId}/chat`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then(setSessions)
-      .catch(() => setSessions([]));
-  }, [repositoryId]);
 
   async function loadSession(id: string) {
     const res = await fetch(
@@ -54,13 +54,26 @@ export function RepoChat({ repositoryId }: { repositoryId: string }) {
     );
   }
 
+  useEffect(() => {
+    fetch(`/api/repositories/${repositoryId}/chat`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: ChatSession[]) => {
+        setSessions(data);
+        if (demoMode && data.length > 0) {
+          loadSession(data[0].id);
+        }
+      })
+      .catch(() => setSessions([]));
+  }, [repositoryId, demoMode]);
+
   function startNewChat() {
+    if (demoMode) return;
     setSessionId(null);
     setMessages([]);
   }
 
   async function sendMessage(message: string) {
-    if (!message.trim() || loading) return;
+    if (!message.trim() || loading || demoMode) return;
 
     const userMessage: Message = { role: "user", content: message };
     setMessages((prev) => [...prev, userMessage]);
@@ -116,10 +129,16 @@ export function RepoChat({ repositoryId }: { repositoryId: string }) {
       <CardHeader className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-lg">Ask Repository</CardTitle>
-          <Button variant="outline" size="sm" onClick={startNewChat}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={startNewChat}
+            disabled={demoMode}
+          >
             New chat
           </Button>
         </div>
+        {demoMode && <DemoReadonlyNotice />}
         {sessions.length > 0 && (
           <ScrollArea className="h-20">
             <div className="flex flex-wrap gap-2">
@@ -146,7 +165,7 @@ export function RepoChat({ repositoryId }: { repositoryId: string }) {
               variant="outline"
               size="sm"
               onClick={() => sendMessage(suggestion)}
-              disabled={loading}
+              disabled={loading || demoMode}
             >
               {suggestion}
             </Button>
@@ -187,9 +206,9 @@ export function RepoChat({ repositoryId }: { repositoryId: string }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Why was Redis added?"
-            disabled={loading}
+            disabled={loading || demoMode}
           />
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading || demoMode}>
             {loading ? "..." : "Send"}
           </Button>
         </form>

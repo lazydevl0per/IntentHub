@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
-import { auth } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo";
+import { getAppSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({
@@ -7,13 +8,16 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await getAppSession();
   if (!session?.user) {
     redirect("/login");
   }
 
   return (
-    <AppShell userName={session.user.name ?? session.user.email}>
+    <AppShell
+      userName={session.user.name ?? session.user.email}
+      demoMode={isDemoMode()}
+    >
       {children}
     </AppShell>
   );

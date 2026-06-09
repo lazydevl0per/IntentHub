@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 
 export function SyncRepositoryButton({
   repositoryId,
+  demoMode,
 }: {
   repositoryId: string;
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -27,7 +29,12 @@ export function SyncRepositoryButton({
   }
 
   return (
-    <Button variant="outline" onClick={handleSync} disabled={loading}>
+    <Button
+      variant="outline"
+      onClick={handleSync}
+      disabled={loading || demoMode}
+      title={demoMode ? "Demo mode — read only" : undefined}
+    >
       {loading ? "Syncing..." : "Sync"}
     </Button>
   );

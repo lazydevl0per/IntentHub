@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { KnowledgeGraphView } from "@/components/knowledge-graph-view";
 import { Button } from "@/components/ui/button";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getObjectiveAccess } from "@/lib/data/objective";
+import { getAppSession } from "@/lib/session";
 import { ArrowLeft } from "lucide-react";
 
 export default async function KnowledgeGraphPage({
@@ -11,24 +11,13 @@ export default async function KnowledgeGraphPage({
 }: {
   params: Promise<{ objectiveId: string }>;
 }) {
-  const session = await auth();
+  const session = await getAppSession();
   const userId = session!.user!.id;
   const { objectiveId } = await params;
 
-  const objective = await prisma.objective.findUnique({
-    where: { id: objectiveId },
-    include: {
-      repository: {
-        include: {
-          members: { where: { userId } },
-        },
-      },
-    },
-  });
+  const objective = await getObjectiveAccess(objectiveId, userId);
 
-  if (!objective || objective.repository.members.length === 0) {
-    notFound();
-  }
+  if (!objective) notFound();
 
   return (
     <div className="space-y-6">
