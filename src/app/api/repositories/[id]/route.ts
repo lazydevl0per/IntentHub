@@ -1,4 +1,5 @@
 import {
+  badRequest,
   getSessionUser,
   notFound,
   requireRepoAccess,
@@ -6,6 +7,7 @@ import {
 } from "@/lib/api";
 import { deleteRepositoryWebhook } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
+import { repositorySettingsSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -39,6 +41,35 @@ export async function GET(
         },
       },
     },
+  });
+
+  return NextResponse.json(repository);
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
+  const { id } = await params;
+  const member = await requireRepoAccess(id, user.id);
+  if (!member) return notFound();
+
+  if (member.role !== "OWNER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const parsed = repositorySettingsSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest("Invalid repository settings");
+  }
+
+  const repository = await prisma.repository.update({
+    where: { id },
+    data: parsed.data,
   });
 
   return NextResponse.json(repository);

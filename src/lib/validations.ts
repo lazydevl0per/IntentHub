@@ -20,6 +20,12 @@ export const planSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "REJECTED", "SELECTED"]).optional(),
 });
 
+export const executeAgentRunSchema = z.object({
+  planId: z.string().min(1),
+  agentName: z.string().min(1).max(100).optional(),
+  model: z.string().max(100).optional(),
+});
+
 export const agentRunSchema = z.object({
   planId: z.string().optional(),
   agentName: z.string().min(1).max(100),
@@ -64,4 +70,8 @@ export const connectRepoSchema = z.object({
   name: z.string(),
   fullName: z.string(),
   defaultBranch: z.string().optional(),
+});
+
+export const repositorySettingsSchema = z.object({
+  agentSystemPrompt: z.string().max(8000).nullable().optional(),
 });
