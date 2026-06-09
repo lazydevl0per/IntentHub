@@ -12,6 +12,7 @@ IntentHub is an AI-native collaboration layer on top of Git that preserves objec
 - NextAuth (credentials + GitHub OAuth)
 - OpenAI (RAG chat + embeddings)
 - GitHub API + webhooks
+- Trigger.dev (background sync, indexing, webhooks)
 
 ## Local Setup
 
@@ -46,9 +47,20 @@ npm run db:seed
 
 ### 4. Run dev server
 
+In one terminal:
+
 ```bash
 npm run dev
 ```
+
+For background jobs (sync, indexing, webhooks), run Trigger.dev in a second terminal:
+
+```bash
+npx trigger.dev@latest login
+npm run dev:trigger
+```
+
+Set `TRIGGER_SECRET_KEY` and `TRIGGER_PROJECT_REF` from your [Trigger.dev](https://trigger.dev) project dashboard. Without these, jobs run inline in the API process (fine for local testing).
 
 Open [http://localhost:3000](http://localhost:3000).
 
@@ -84,6 +96,7 @@ For local development, use [smee.io](https://smee.io) or ngrok to tunnel webhook
 5. Set `NEXT_PUBLIC_APP_URL` to your production URL
 6. Update GitHub OAuth callback to `https://<your-domain>/api/auth/callback/github`
 7. Verify deployment health at `GET /api/health`
+8. Deploy Trigger.dev tasks: `npm run deploy:trigger` (add `TRIGGER_SECRET_KEY` to Trigger.dev env)
 
 ## Pages
 
@@ -91,6 +104,7 @@ For local development, use [smee.io](https://smee.io) or ngrok to tunnel webhook
 |-------|-------------|
 | `/` | Dashboard |
 | `/repositories/[id]` | Repository objectives, commits, chat |
+| `/repositories/[id]/settings` | Repository sync, webhook status, branches |
 | `/objectives/[id]` | Plans, runs, evaluations, decision |
 | `/knowledge-graph/[objectiveId]` | Interactive knowledge graph |
 

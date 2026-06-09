@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:trigger": "trigger dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
@@ -11,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "deploy:trigger": "trigger deploy",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -29,6 +31,7 @@
     "@radix-ui/react-separator": "^1.1.9",
     "@radix-ui/react-slot": "^1.2.5",
     "@radix-ui/react-tabs": "^1.1.14",
+    "@trigger.dev/sdk": "^4.4.6",
     "@xyflow/react": "^12.11.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
@@ -45,6 +48,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@trigger.dev/build": "^4.4.6",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -53,6 +57,7 @@
     "eslint-config-next": "^15.5.19",
     "prisma": "^6.19.3",
     "tailwindcss": "^4",
+    "trigger.dev": "^4.4.6",
     "tsx": "^4.22.4",
     "typescript": "^5"
   }
