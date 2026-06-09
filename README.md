@@ -2,18 +2,30 @@
 
 Git versions code. IntentHub versions decisions.
 
-IntentHub is an AI-native collaboration layer on top of Git that preserves objectives, plans, agent runs, evaluations, and decision records.
+IntentHub is an AI-native collaboration layer on top of Git. It preserves objectives, plans, agent runs, evaluations, and decision records — linked to commits and searchable over time.
+
+## Features
+
+- **Authentication** — email/password registration and GitHub OAuth
+- **Repository integration** — connect GitHub repos, sync commits/branches, auto-register webhooks
+- **Objectives** — create, edit, and track work with status and priority
+- **Plans** — multiple implementation approaches per objective
+- **Agent runs** — record runs manually or execute an AI agent on a plan (creates a Git branch + implementation report)
+- **Evaluations** — test, benchmark, security, and quality results
+- **Decision records** — capture the winning plan, rationale, and linked commit
+- **Objective summaries** — AI-generated business/technical summaries when a decision is recorded
+- **Semantic commit insights** — intent, architecture impact, and test status on synced commits
+- **Repository chat** — hybrid RAG (vector + full-text search) with persistent chat sessions
+- **Knowledge graph** — interactive view of objective → plan → run → evaluation → decision → commit
 
 ## Stack
 
-- Next.js 15 (App Router)
-- TypeScript, Tailwind CSS, shadcn/ui-style components
-- PostgreSQL + Prisma
+- Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui-style components
+- PostgreSQL + Prisma + pgvector
 - NextAuth (credentials + GitHub OAuth)
-- OpenAI (RAG chat + embeddings)
-- Anthropic (optional chat provider via `AI_PROVIDER=anthropic`)
+- OpenAI (embeddings + chat) with optional Anthropic for chat
 - GitHub API + webhooks
-- Trigger.dev (background sync, indexing, webhooks)
+- Trigger.dev (background sync, indexing, webhooks, AI jobs, agent execution)
 
 ## Local Setup
 
@@ -31,12 +43,21 @@ Uses `pgvector/pgvector:pg16` on port 5432.
 cp .env.example .env
 ```
 
-Fill in:
-
-- `AUTH_SECRET` — run `openssl rand -base64 32`
-- `GITHUB_ID` / `GITHUB_SECRET` — GitHub OAuth app credentials
-- `OPENAI_API_KEY` — for repository chat
-- `GITHUB_WEBHOOK_SECRET` — for webhook signature verification
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `AUTH_SECRET` | Yes | Session secret (`openssl rand -base64 32`) |
+| `GITHUB_ID` / `GITHUB_SECRET` | For GitHub | OAuth app credentials |
+| `OPENAI_API_KEY` | For AI | Embeddings, chat, summaries, commit insights, agents |
+| `NEXT_PUBLIC_APP_URL` | Yes | App URL (e.g. `http://localhost:3000`) — used for webhook registration |
+| `TRIGGER_SECRET_KEY` | Optional | Trigger.dev secret key; without it, jobs run inline |
+| `TRIGGER_PROJECT_REF` | Optional | Trigger.dev project ref |
+| `AI_PROVIDER` | Optional | `openai` (default) or `anthropic` for chat |
+| `AI_CHAT_MODEL` | Optional | Chat model (default `gpt-4o-mini`) |
+| `ANTHROPIC_API_KEY` | If using Anthropic | Required when `AI_PROVIDER=anthropic` |
+| `GITHUB_WEBHOOK_SECRET` | Optional | Fallback webhook secret if per-repo secret is unset |
+| `GITHUB_SYNC_COMMIT_LIMIT` | Optional | Max commits per sync (default `500`) |
+| `GITHUB_SYNC_BRANCH_LIMIT` | Optional | Max branches per sync (default `100`) |
 
 ### 3. Install and migrate
 
@@ -46,36 +67,36 @@ npm run db:migrate
 npm run db:seed
 ```
 
-### 4. Run dev server
+### 4. Run dev servers
 
-In one terminal:
+Terminal 1 — Next.js:
 
 ```bash
 npm run dev
 ```
 
-For background jobs (sync, indexing, webhooks), run Trigger.dev in a second terminal:
+Terminal 2 — Trigger.dev (recommended for sync, indexing, webhooks, AI jobs):
 
 ```bash
 npx trigger.dev@latest login
 npm run dev:trigger
 ```
 
-Set `TRIGGER_SECRET_KEY` and `TRIGGER_PROJECT_REF` from your [Trigger.dev](https://trigger.dev) project dashboard. Without these, jobs run inline in the API process (fine for local testing).
-
 Open [http://localhost:3000](http://localhost:3000).
 
 Demo account after seeding: `demo@intenthub.dev` / `password123`
 
+Link GitHub via OAuth to connect repositories and run agents (branch creation requires a linked GitHub account).
+
 ## GitHub OAuth App
 
 1. Create a GitHub OAuth App
-2. Set callback URL to `http://localhost:3000/api/auth/callback/github`
+2. Set callback URL to `http://localhost:3000/api/auth/callback/github` (or your production URL)
 3. Request scopes: `read:user`, `user:email`, `repo`
 
-## Webhooks (optional)
+## Webhooks
 
-Point GitHub webhooks to:
+When you connect a repository, IntentHub automatically registers a webhook at:
 
 ```
 POST /api/webhooks/github
@@ -83,42 +104,82 @@ POST /api/webhooks/github
 
 Events: `push`, `create`, `delete`
 
-For local development, use [smee.io](https://smee.io) or ngrok to tunnel webhooks.
+Check webhook status on the repository **Settings** page. If auto-registration fails, verify `NEXT_PUBLIC_APP_URL` is correct.
+
+For local development without a public URL, use [smee.io](https://smee.io) or ngrok to tunnel webhooks, or rely on manual **Sync** from the repository page.
 
 ## Deploy to Vercel
 
-1. Push to GitHub
-2. Import project in Vercel
-3. Add environment variables from `.env.example`
-4. Use [Neon](https://neon.tech) PostgreSQL with `pgvector` enabled:
-   - Create a project and copy the connection string to `DATABASE_URL`
-   - In the Neon SQL editor, run: `CREATE EXTENSION IF NOT EXISTS vector;`
-   - Run migrations: `npx prisma migrate deploy` (or let Vercel build handle `prisma generate`)
-5. Set `NEXT_PUBLIC_APP_URL` to your production URL
-6. Update GitHub OAuth callback to `https://<your-domain>/api/auth/callback/github`
-7. Verify deployment health at `GET /api/health`
-8. Deploy Trigger.dev tasks: `npm run deploy:trigger` (add `TRIGGER_SECRET_KEY` to Trigger.dev env)
+1. Push to GitHub and import the project in Vercel
+2. Add environment variables from `.env.example`
+3. Use [Neon](https://neon.tech) PostgreSQL with `pgvector` enabled:
+   - Copy the connection string to `DATABASE_URL`
+   - In the Neon SQL editor: `CREATE EXTENSION IF NOT EXISTS vector;`
+   - Run migrations: `npx prisma migrate deploy`
+4. Set `NEXT_PUBLIC_APP_URL` to your production URL
+5. Update the GitHub OAuth callback to `https://<your-domain>/api/auth/callback/github`
+6. Verify health: `GET /api/health`
+7. Deploy Trigger.dev tasks: `npm run deploy:trigger`
 
 ## Pages
 
 | Route | Description |
 |-------|-------------|
-| `/` | Dashboard |
-| `/repositories/[id]` | Repository objectives, commits, chat |
-| `/repositories/[id]/settings` | Repository sync, webhook status, branches |
-| `/objectives/[id]` | Plans, runs, evaluations, decision |
+| `/login`, `/register` | Authentication |
+| `/` | Dashboard — repos, active objectives, recent decisions |
+| `/repositories/[id]` | Objectives, commits with semantic insights, RAG chat |
+| `/repositories/[id]/settings` | Sync, webhook status, branches, agent prompt, disconnect |
+| `/objectives/[id]` | Plans, agent runs, evaluations, decision, AI summary |
 | `/knowledge-graph/[objectiveId]` | Interactive knowledge graph |
 
 ## API Overview
 
+### Auth
+
 - `POST /api/auth/register` — email/password registration
-- `GET/POST /api/repositories` — list/connect repositories
-- `GET/POST /api/repositories/[id]/objectives` — objectives CRUD
-- `POST /api/objectives/[id]/plans` — create plans
-- `POST /api/objectives/[id]/agent-runs/execute` — run AI agent on a plan (creates branch + report)
+
+### Repositories
+
+- `GET /api/repositories` — list connected repositories
+- `POST /api/repositories` — connect a repository (sync + webhook registration)
+- `GET /api/repositories/github` — list GitHub repos for the authenticated user
+- `GET /api/repositories/[id]` — repository detail
+- `PATCH /api/repositories/[id]` — update settings (e.g. agent system prompt)
+- `DELETE /api/repositories/[id]` — disconnect or leave repository
+- `POST /api/repositories/[id]/sync` — manual sync (queued via Trigger.dev when configured)
+- `GET/POST /api/repositories/[id]/objectives` — list/create objectives
+- `GET/POST /api/repositories/[id]/chat` — list chat sessions / send message (streamed)
+- `GET /api/repositories/[id]/chat/sessions/[sessionId]` — load chat session messages
+
+### Objectives
+
+- `GET/PATCH/DELETE /api/objectives/[id]` — objective detail, update, delete
+- `POST /api/objectives/[id]/plans` — create plan
+- `PATCH/DELETE /api/plans/[id]` — update/delete plan
+- `POST /api/objectives/[id]/agent-runs` — manually record an agent run
+- `POST /api/objectives/[id]/agent-runs/execute` — run AI agent on a plan (branch + report)
 - `GET /api/agent-runs/[id]` — agent run status
-- `POST /api/objectives/[id]/evaluations` — record evaluations
-- `POST /api/objectives/[id]/decision` — record decision
-- `POST /api/repositories/[id]/chat` — RAG chat (streamed)
+- `POST /api/objectives/[id]/evaluations` — record evaluation
+- `POST /api/objectives/[id]/decision` — record decision (triggers objective summary)
+- `GET /api/objectives/[id]/graph` — knowledge graph data
+
+### System
+
 - `GET /api/health` — database connectivity check
 - `POST /api/webhooks/github` — GitHub webhook handler
+
+## Background Jobs
+
+When `TRIGGER_SECRET_KEY` is set, these run asynchronously via Trigger.dev:
+
+| Job | Trigger |
+|-----|---------|
+| `sync-repository` | Repo connect, manual sync |
+| `index-entity` | Entity create/update |
+| `github-webhook` | GitHub push/branch events |
+| `analyze-commit` | After commit indexing |
+| `generate-objective-summary` | After decision recorded |
+| `execute-agent-run` | Agent execution requested |
+| `reindex-repository` | Full repository reindex |
+
+Without Trigger.dev, the same work runs inline in the API process (fine for local testing, not ideal for production).
