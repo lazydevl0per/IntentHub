@@ -36,6 +36,10 @@ export default async function RepositoryPage({
         orderBy: { committedAt: "desc" },
         take: 15,
       },
+      commitInsights: {
+        orderBy: { createdAt: "desc" },
+        take: 15,
+      },
       branches: {
         orderBy: { name: "asc" },
       },
@@ -107,15 +111,47 @@ export default async function RepositoryPage({
                 {repository.commits.length === 0 ? (
                   <p className="p-6 text-sm text-zinc-500">No commits synced yet.</p>
                 ) : (
-                  repository.commits.map((commit) => (
-                    <div key={commit.id} className="px-6 py-4">
-                      <p className="font-mono text-sm">{commit.sha.slice(0, 7)}</p>
-                      <p className="text-sm">{commit.message}</p>
-                      <p className="text-xs text-zinc-500">
-                        {commit.author} · {commit.committedAt.toLocaleDateString()}
-                      </p>
-                    </div>
-                  ))
+                  repository.commits.map((commit) => {
+                    const insight = repository.commitInsights.find(
+                      (i) => i.sha === commit.sha
+                    );
+
+                    return (
+                      <div key={commit.id} className="px-6 py-4">
+                        <p className="font-mono text-sm">{commit.sha.slice(0, 7)}</p>
+                        <p className="text-sm">{commit.message}</p>
+                        {insight && (
+                          <div className="mt-2 space-y-1 rounded-md bg-zinc-50 p-2 text-xs dark:bg-zinc-900">
+                            <p>
+                              <span className="font-medium">Intent:</span>{" "}
+                              {insight.intent}
+                            </p>
+                            {insight.archImpact && (
+                              <p>
+                                <span className="font-medium">Architecture:</span>{" "}
+                                {insight.archImpact}
+                              </p>
+                            )}
+                            {insight.perfImpact && (
+                              <p>
+                                <span className="font-medium">Performance:</span>{" "}
+                                {insight.perfImpact}
+                              </p>
+                            )}
+                            {insight.testStatus && (
+                              <p>
+                                <span className="font-medium">Tests:</span>{" "}
+                                {insight.testStatus}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {commit.author} · {commit.committedAt.toLocaleDateString()}
+                        </p>
+                      </div>
+                    );
+                  })
                 )}
               </CardContent>
             </Card>

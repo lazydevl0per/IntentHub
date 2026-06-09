@@ -8,6 +8,7 @@ import {
   EditObjectiveDialog,
   EditPlanDialog,
 } from "@/components/objective-forms";
+import { ObjectiveSummary } from "@/components/objective-summary";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,6 +109,10 @@ export default async function ObjectivePage({
           </Button>
         </div>
       </div>
+
+      {objective.status === "COMPLETED" && (
+        <ObjectiveSummary objective={objective} />
+      )}
 
       <Tabs defaultValue="plans">
         <TabsList>

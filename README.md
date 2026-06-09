@@ -11,6 +11,7 @@ IntentHub is an AI-native collaboration layer on top of Git that preserves objec
 - PostgreSQL + Prisma
 - NextAuth (credentials + GitHub OAuth)
 - OpenAI (RAG chat + embeddings)
+- Anthropic (optional chat provider via `AI_PROVIDER=anthropic`)
 - GitHub API + webhooks
 - Trigger.dev (background sync, indexing, webhooks)
 
