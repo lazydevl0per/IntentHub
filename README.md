@@ -77,8 +77,13 @@ For local development, use [smee.io](https://smee.io) or ngrok to tunnel webhook
 1. Push to GitHub
 2. Import project in Vercel
 3. Add environment variables from `.env.example`
-4. Use Neon or Supabase PostgreSQL with `pgvector` enabled
+4. Use [Neon](https://neon.tech) PostgreSQL with `pgvector` enabled:
+   - Create a project and copy the connection string to `DATABASE_URL`
+   - In the Neon SQL editor, run: `CREATE EXTENSION IF NOT EXISTS vector;`
+   - Run migrations: `npx prisma migrate deploy` (or let Vercel build handle `prisma generate`)
 5. Set `NEXT_PUBLIC_APP_URL` to your production URL
+6. Update GitHub OAuth callback to `https://<your-domain>/api/auth/callback/github`
+7. Verify deployment health at `GET /api/health`
 
 ## Pages
 
@@ -99,4 +104,5 @@ For local development, use [smee.io](https://smee.io) or ngrok to tunnel webhook
 - `POST /api/objectives/[id]/evaluations` — record evaluations
 - `POST /api/objectives/[id]/decision` — record decision
 - `POST /api/repositories/[id]/chat` — RAG chat (streamed)
+- `GET /api/health` — database connectivity check
 - `POST /api/webhooks/github` — GitHub webhook handler
