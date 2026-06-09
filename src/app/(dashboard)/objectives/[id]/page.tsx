@@ -5,6 +5,8 @@ import {
   CreateDecisionForm,
   CreateEvaluationForm,
   CreatePlanForm,
+  EditObjectiveDialog,
+  EditPlanDialog,
 } from "@/components/objective-forms";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -88,12 +90,23 @@ export default async function ObjectivePage({
             <StatusBadge value={objective.priority} />
           </div>
         </div>
-        <Button asChild variant="outline">
-          <Link href={`/knowledge-graph/${objective.id}`}>
-            <Network className="mr-2 h-4 w-4" />
-            Knowledge Graph
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <EditObjectiveDialog
+            objective={{
+              id: objective.id,
+              title: objective.title,
+              description: objective.description,
+              status: objective.status,
+              priority: objective.priority,
+            }}
+          />
+          <Button asChild variant="outline">
+            <Link href={`/knowledge-graph/${objective.id}`}>
+              <Network className="mr-2 h-4 w-4" />
+              Knowledge Graph
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="plans">
@@ -108,10 +121,19 @@ export default async function ObjectivePage({
           <div className="grid gap-4 md:grid-cols-2">
             {objective.plans.map((plan, index) => (
               <Card key={plan.id}>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-start justify-between space-y-0">
                   <CardTitle className="text-lg">
                     Plan {String.fromCharCode(65 + index)}: {plan.title}
                   </CardTitle>
+                  <EditPlanDialog
+                    plan={{
+                      id: plan.id,
+                      title: plan.title,
+                      description: plan.description,
+                      approach: plan.approach,
+                      status: plan.status,
+                    }}
+                  />
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <p>{plan.description}</p>

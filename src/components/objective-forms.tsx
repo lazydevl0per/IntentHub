@@ -365,3 +365,241 @@ export function CreateDecisionForm({
     </form>
   );
 }
+
+export function EditObjectiveDialog({
+  objective,
+}: {
+  objective: {
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+  };
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(objective.title);
+  const [description, setDescription] = useState(objective.description);
+  const [status, setStatus] = useState(objective.status);
+  const [priority, setPriority] = useState(objective.priority);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+
+    const res = await fetch(`/api/objectives/${objective.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, description, status, priority }),
+    });
+
+    if (res.ok) {
+      setOpen(false);
+      router.refresh();
+    }
+
+    setLoading(false);
+  }
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this objective and all related data?")) {
+      return;
+    }
+
+    setLoading(true);
+
+    const res = await fetch(`/api/objectives/${objective.id}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      router.push("/");
+      router.refresh();
+    }
+
+    setLoading(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          Edit Objective
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Objective</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DRAFT">DRAFT</SelectItem>
+                <SelectItem value="ACTIVE">ACTIVE</SelectItem>
+                <SelectItem value="COMPLETED">COMPLETED</SelectItem>
+                <SelectItem value="ARCHIVED">ARCHIVED</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Priority</Label>
+            <Select value={priority} onValueChange={setPriority}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="LOW">LOW</SelectItem>
+                <SelectItem value="MEDIUM">MEDIUM</SelectItem>
+                <SelectItem value="HIGH">HIGH</SelectItem>
+                <SelectItem value="CRITICAL">CRITICAL</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-300 text-red-700 dark:border-red-900 dark:text-red-400"
+              onClick={handleDelete}
+              disabled={loading}
+            >
+              Delete
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function EditPlanDialog({
+  plan,
+}: {
+  plan: {
+    id: string;
+    title: string;
+    description: string;
+    approach: string;
+    status: string;
+  };
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(plan.title);
+  const [description, setDescription] = useState(plan.description);
+  const [approach, setApproach] = useState(plan.approach);
+  const [status, setStatus] = useState(plan.status);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+
+    const res = await fetch(`/api/plans/${plan.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, description, approach, status }),
+    });
+
+    if (res.ok) {
+      setOpen(false);
+      router.refresh();
+    }
+
+    setLoading(false);
+  }
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this plan?")) {
+      return;
+    }
+
+    setLoading(true);
+
+    const res = await fetch(`/api/plans/${plan.id}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      setOpen(false);
+      router.refresh();
+    }
+
+    setLoading(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Plan</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Approach</Label>
+            <Textarea value={approach} onChange={(e) => setApproach(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DRAFT">DRAFT</SelectItem>
+                <SelectItem value="ACTIVE">ACTIVE</SelectItem>
+                <SelectItem value="REJECTED">REJECTED</SelectItem>
+                <SelectItem value="SELECTED">SELECTED</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-300 text-red-700 dark:border-red-900 dark:text-red-400"
+              onClick={handleDelete}
+              disabled={loading}
+            >
+              Delete
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
