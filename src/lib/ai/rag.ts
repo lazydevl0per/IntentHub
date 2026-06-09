@@ -4,6 +4,12 @@ import { createEmbedding, streamChatCompletion, type ChatMessage } from "@/lib/a
 import { fullTextSearch } from "@/lib/search";
 import { DocumentEntityType } from "@prisma/client";
 
+export type RagCitation = {
+  entityType: string;
+  entityId: string;
+  title: string;
+};
+
 function chunkText(text: string, maxLength = 1000) {
   const chunks: string[] = [];
   let remaining = text.trim();
@@ -89,27 +95,53 @@ export async function vectorSearch(
   return results;
 }
 
-export async function buildRagContext(repositoryId: string, query: string) {
+function citationKey(entityType: string, entityId: string) {
+  return `${entityType}:${entityId}`;
+}
+
+export async function buildRagContextWithCitations(
+  repositoryId: string,
+  query: string
+) {
   const [vectorResults, ftsResults] = await Promise.all([
     vectorSearch(repositoryId, query),
     fullTextSearch(repositoryId, query, 5),
   ]);
 
   const contextParts: string[] = [];
+  const citations = new Map<string, RagCitation>();
 
   for (const result of vectorResults) {
     contextParts.push(
       `[${result.entityType}:${result.entityId}] ${result.content}`
     );
+    citations.set(citationKey(result.entityType, result.entityId), {
+      entityType: result.entityType,
+      entityId: result.entityId,
+      title: result.entityType,
+    });
   }
 
   for (const result of ftsResults) {
     contextParts.push(
       `[${result.entity_type}:${result.entity_id}] ${result.title}: ${result.content}`
     );
+    citations.set(citationKey(result.entity_type, result.entity_id), {
+      entityType: result.entity_type,
+      entityId: result.entity_id,
+      title: result.title,
+    });
   }
 
-  return contextParts.join("\n\n");
+  return {
+    context: contextParts.join("\n\n"),
+    citations: Array.from(citations.values()),
+  };
+}
+
+export async function buildRagContext(repositoryId: string, query: string) {
+  const { context } = await buildRagContextWithCitations(repositoryId, query);
+  return context;
 }
 
 export async function* streamRepositoryChat(params: {
@@ -117,27 +149,58 @@ export async function* streamRepositoryChat(params: {
   message: string;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
 }) {
-  const context = await buildRagContext(params.repositoryId, params.message);
+  const { content } = streamRepositoryChatWithCitations(params);
+  yield* content;
+}
 
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content: `You are IntentHub, an AI assistant that answers questions about a software repository's objectives, plans, decisions, and implementation history. Use only the provided context. If the context is insufficient, say so clearly.
+export type StreamRepositoryChatResult = {
+  content: AsyncGenerator<string, RagCitation[], void>;
+  citations: Promise<RagCitation[]>;
+};
+
+export function streamRepositoryChatWithCitations(params: {
+  repositoryId: string;
+  message: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+}): StreamRepositoryChatResult {
+  let resolveCitations: (citations: RagCitation[]) => void = () => {};
+  const citationsPromise = new Promise<RagCitation[]>((resolve) => {
+    resolveCitations = resolve;
+  });
+
+  async function* generator() {
+    const { context, citations } = await buildRagContextWithCitations(
+      params.repositoryId,
+      params.message
+    );
+
+    resolveCitations(citations);
+
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content: `You are IntentHub, an AI assistant that answers questions about a software repository's objectives, plans, decisions, and implementation history. Use only the provided context. If the context is insufficient, say so clearly.
 
 Context:
 ${context || "No repository knowledge found yet."}`,
-    },
-  ];
+      },
+    ];
 
-  if (params.history) {
-    for (const item of params.history) {
-      messages.push({ role: item.role, content: item.content });
+    if (params.history) {
+      for (const item of params.history) {
+        messages.push({ role: item.role, content: item.content });
+      }
+    }
+
+    messages.push({ role: "user", content: params.message });
+
+    for await (const chunk of streamChatCompletion(messages)) {
+      yield chunk;
     }
   }
 
-  messages.push({ role: "user", content: params.message });
-
-  for await (const chunk of streamChatCompletion(messages)) {
-    yield chunk;
-  }
+  return {
+    content: generator(),
+    citations: citationsPromise,
+  };
 }

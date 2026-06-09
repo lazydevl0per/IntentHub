@@ -10,6 +10,7 @@ import { DemoReadonlyNotice } from "@/components/demo-readonly";
 type Message = {
   role: "user" | "assistant";
   content: string;
+  citations?: Array<{ entityType: string; entityId: string; title: string }>;
 };
 
 type ChatSession = {
@@ -24,6 +25,30 @@ const suggestions = [
   "What alternatives were rejected?",
   "Which objectives are still active?",
 ];
+
+function parseAssistantStream(raw: string) {
+  const marker = "\n\n[[CITATIONS]]";
+  const endMarker = "[[/CITATIONS]]";
+  const start = raw.indexOf(marker);
+  if (start === -1) {
+    return { content: raw, citations: [] as Message["citations"] };
+  }
+
+  const end = raw.indexOf(endMarker, start);
+  if (end === -1) {
+    return { content: raw.slice(0, start), citations: [] };
+  }
+
+  const content = raw.slice(0, start);
+  try {
+    const citations = JSON.parse(
+      raw.slice(start + marker.length, end)
+    ) as Message["citations"];
+    return { content, citations: citations ?? [] };
+  } catch {
+    return { content, citations: [] };
+  }
+}
 
 export function RepoChat({
   repositoryId,
@@ -118,6 +143,17 @@ export function RepoChat({
 
     setLoading(false);
 
+    const parsed = parseAssistantStream(assistantContent);
+    setMessages((prev) => {
+      const next = [...prev];
+      next[next.length - 1] = {
+        role: "assistant",
+        content: parsed.content,
+        citations: parsed.citations,
+      };
+      return next;
+    });
+
     fetch(`/api/repositories/${repositoryId}/chat`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setSessions)
@@ -191,6 +227,23 @@ export function RepoChat({
                   {message.role}
                 </p>
                 <p className="whitespace-pre-wrap">{message.content}</p>
+                {message.citations && message.citations.length > 0 && (
+                  <div className="mt-3 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                    <p className="mb-1 text-xs font-medium uppercase text-zinc-500">
+                      Sources
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {message.citations.map((citation) => (
+                        <span
+                          key={`${citation.entityType}-${citation.entityId}`}
+                          className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800"
+                        >
+                          {citation.entityType}: {citation.title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

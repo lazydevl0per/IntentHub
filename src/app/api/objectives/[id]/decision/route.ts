@@ -76,6 +76,14 @@ export async function POST(
     data: { status: "SELECTED" },
   });
 
+  await prisma.plan.updateMany({
+    where: {
+      objectiveId: id,
+      id: { not: parsed.data.selectedPlanId },
+    },
+    data: { status: "REJECTED" },
+  });
+
   try {
     await enqueueIndexEntity({ entity: "decision", objectiveId: id });
   } catch (error) {

@@ -5,7 +5,7 @@ import {
   requireRepoAccess,
   unauthorized,
 } from "@/lib/api";
-import { streamRepositoryChat } from "@/lib/ai/rag";
+import { streamRepositoryChatWithCitations } from "@/lib/ai/rag";
 import { getDemoChatSessions } from "@/lib/demo/fixtures";
 import { isDemoMode } from "@/lib/demo";
 import { chatSchema } from "@/lib/validations";
@@ -109,14 +109,20 @@ export async function POST(
       let assistantContent = "";
 
       try {
-        for await (const chunk of streamRepositoryChat({
+        const { content, citations } = streamRepositoryChatWithCitations({
           repositoryId: id,
           message: parsed.data.message,
           history,
-        })) {
+        });
+
+        for await (const chunk of content) {
           assistantContent += chunk;
           controller.enqueue(encoder.encode(chunk));
         }
+
+        const citationList = await citations;
+        const citationBlock = `\n\n[[CITATIONS]]${JSON.stringify(citationList)}[[/CITATIONS]]`;
+        controller.enqueue(encoder.encode(citationBlock));
 
         await prisma.chatMessage.create({
           data: {
