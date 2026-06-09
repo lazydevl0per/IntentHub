@@ -122,6 +122,7 @@ model Repository {
   webhookSecret  String?
   githubWebhookId Int?
   lastSyncedAt   DateTime?
+  agentSystemPrompt String? @db.Text
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -206,6 +207,9 @@ model AgentRun {
   output      String         @db.Text
   branchName  String?
   status      AgentRunStatus @default(PENDING)
+  promptTokens     Int?
+  completionTokens Int?
+  errorMessage     String?        @db.Text
   createdById String
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
