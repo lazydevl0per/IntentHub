@@ -49,7 +49,7 @@ describe("health route", () => {
   it("returns ok in demo mode without database", async () => {
     process.env.DEMO_MODE = "true";
     const { GET } = await import("../src/app/api/health/route");
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/health"));
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.status, "ok");

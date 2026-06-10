@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Background,
   Controls,
@@ -24,9 +25,14 @@ const nodeColors: Record<string, string> = {
   deployment: "#0ea5e9",
 };
 
-function layoutNodes(
-  apiNodes: Array<{ id: string; type: string; label: string }>
-): Node[] {
+type GraphNode = {
+  id: string;
+  type: string;
+  label: string;
+  href?: string;
+};
+
+function layoutNodes(apiNodes: GraphNode[]): Node[] {
   const layers: Record<string, number> = {
     objective: 0,
     plan: 1,
@@ -51,8 +57,12 @@ function layoutNodes(
           <div className="text-xs">
             <p className="font-medium">{node.type}</p>
             <p>{node.label}</p>
+            {node.href && (
+              <p className="mt-1 text-[10px] underline opacity-80">Open</p>
+            )}
           </div>
         ),
+        href: node.href,
       },
       position: { x: layer * 220, y: index * 100 },
       style: {
@@ -62,12 +72,14 @@ function layoutNodes(
         borderRadius: 8,
         padding: 8,
         width: 180,
+        cursor: node.href ? "pointer" : "default",
       },
     };
   });
 }
 
 export function KnowledgeGraphView({ objectiveId }: { objectiveId: string }) {
+  const router = useRouter();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);
@@ -97,6 +109,16 @@ export function KnowledgeGraphView({ objectiveId }: { objectiveId: string }) {
     loadGraph();
   }, [loadGraph]);
 
+  const onNodeClick = useCallback(
+    (_: MouseEvent, node: Node) => {
+      const href = node.data?.href as string | undefined;
+      if (href) {
+        router.push(href);
+      }
+    },
+    [router]
+  );
+
   if (loading) {
     return <p className="text-sm text-zinc-500">Loading knowledge graph...</p>;
   }
@@ -116,6 +138,7 @@ export function KnowledgeGraphView({ objectiveId }: { objectiveId: string }) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={onNodeClick}
         fitView
       >
         <Background />
@@ -123,11 +146,10 @@ export function KnowledgeGraphView({ objectiveId }: { objectiveId: string }) {
         <MiniMap />
       </ReactFlow>
       <p className="mt-2 text-xs text-zinc-500">
-        Navigate to the{" "}
+        Click nodes to navigate.{" "}
         <Link href={`/objectives/${objectiveId}`} className="underline">
-          objective page
-        </Link>{" "}
-        to add more entities.
+          Objective page
+        </Link>
       </p>
     </div>
   );

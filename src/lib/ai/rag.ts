@@ -99,6 +99,92 @@ function citationKey(entityType: string, entityId: string) {
   return `${entityType}:${entityId}`;
 }
 
+const entityTypeLabels: Record<string, string> = {
+  OBJECTIVE: "Objective",
+  PLAN: "Plan",
+  AGENT_RUN: "Agent Run",
+  EVALUATION: "Evaluation",
+  DECISION: "Decision",
+  COMMIT: "Commit",
+};
+
+async function resolveCitationTitle(
+  entityType: string,
+  entityId: string
+): Promise<string> {
+  const label = entityTypeLabels[entityType] ?? entityType;
+
+  try {
+    switch (entityType) {
+      case "OBJECTIVE": {
+        const row = await prisma.objective.findUnique({
+          where: { id: entityId },
+          select: { title: true },
+        });
+        return row ? `${label}: ${row.title}` : label;
+      }
+      case "PLAN": {
+        const row = await prisma.plan.findUnique({
+          where: { id: entityId },
+          select: { title: true },
+        });
+        return row ? `${label}: ${row.title}` : label;
+      }
+      case "AGENT_RUN": {
+        const row = await prisma.agentRun.findUnique({
+          where: { id: entityId },
+          select: { agentName: true },
+        });
+        return row ? `${label}: ${row.agentName}` : label;
+      }
+      case "EVALUATION": {
+        const row = await prisma.evaluation.findUnique({
+          where: { id: entityId },
+          select: { type: true, score: true },
+        });
+        return row ? `${label}: ${row.type} (${row.score})` : label;
+      }
+      case "DECISION":
+        return `${label}`;
+      case "COMMIT": {
+        const row = await prisma.gitCommit.findUnique({
+          where: { id: entityId },
+          select: { sha: true, message: true },
+        });
+        if (row) {
+          return `${label}: ${row.sha.slice(0, 7)} — ${row.message.slice(0, 60)}`;
+        }
+        const bySha = await prisma.gitCommit.findFirst({
+          where: { sha: { startsWith: entityId.slice(0, 7) } },
+          select: { sha: true, message: true },
+        });
+        return bySha
+          ? `${label}: ${bySha.sha.slice(0, 7)} — ${bySha.message.slice(0, 60)}`
+          : label;
+      }
+      default:
+        return label;
+    }
+  } catch {
+    return label;
+  }
+}
+
+async function enrichCitations(citations: Map<string, RagCitation>) {
+  const entries = Array.from(citations.entries());
+  const resolved = await Promise.all(
+    entries.map(async ([key, citation]) => {
+      const title = await resolveCitationTitle(
+        citation.entityType,
+        citation.entityId
+      );
+      return [key, { ...citation, title }] as const;
+    })
+  );
+
+  return new Map(resolved);
+}
+
 export async function buildRagContextWithCitations(
   repositoryId: string,
   query: string
@@ -118,7 +204,7 @@ export async function buildRagContextWithCitations(
     citations.set(citationKey(result.entityType, result.entityId), {
       entityType: result.entityType,
       entityId: result.entityId,
-      title: result.entityType,
+      title: entityTypeLabels[result.entityType] ?? result.entityType,
     });
   }
 
@@ -133,9 +219,11 @@ export async function buildRagContextWithCitations(
     });
   }
 
+  const enriched = await enrichCitations(citations);
+
   return {
     context: contextParts.join("\n\n"),
-    citations: Array.from(citations.values()),
+    citations: Array.from(enriched.values()),
   };
 }
 
@@ -154,7 +242,7 @@ export async function* streamRepositoryChat(params: {
 }
 
 export type StreamRepositoryChatResult = {
-  content: AsyncGenerator<string, RagCitation[], void>;
+  content: AsyncGenerator<string, void, unknown>;
   citations: Promise<RagCitation[]>;
 };
 

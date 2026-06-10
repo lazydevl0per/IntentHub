@@ -31,12 +31,12 @@ import {
   handlePushWebhook,
 } from "@/lib/github";
 
-function useTrigger() {
+function isTriggerConfigured() {
   return Boolean(process.env.TRIGGER_SECRET_KEY);
 }
 
 export async function enqueueIndexEntity(payload: IndexEntityPayload) {
-  if (useTrigger()) {
+  if (isTriggerConfigured()) {
     const handle = await tasks.trigger<typeof indexEntityTask>(
       "index-entity",
       payload
@@ -79,7 +79,7 @@ async function runAnalyzeCommit(repositoryId: string, sha: string) {
 }
 
 export async function enqueueGenerateObjectiveSummary(objectiveId: string) {
-  if (useTrigger()) {
+  if (isTriggerConfigured()) {
     return tasks.trigger<typeof generateObjectiveSummaryTask>(
       "generate-objective-summary",
       { objectiveId }
@@ -107,7 +107,7 @@ export async function enqueueAnalyzeCommit(
   repositoryId: string,
   sha: string
 ) {
-  if (useTrigger()) {
+  if (isTriggerConfigured()) {
     return tasks.trigger<typeof analyzeCommitTask>("analyze-commit", {
       repositoryId,
       sha,
@@ -122,7 +122,7 @@ export async function enqueueSyncRepository(
   repositoryId: string,
   options?: { indexCommits?: boolean; commitLimit?: number }
 ) {
-  if (useTrigger()) {
+  if (isTriggerConfigured()) {
     return tasks.trigger<typeof syncRepositoryTask>("sync-repository", {
       repositoryId,
       indexCommits: options?.indexCommits,
@@ -159,7 +159,7 @@ export async function enqueueSyncRepository(
 }
 
 export async function enqueueGitHubWebhook(payload: GitHubWebhookPayload) {
-  if (useTrigger()) {
+  if (isTriggerConfigured()) {
     return tasks.trigger<typeof githubWebhookTask>("github-webhook", payload);
   }
 
@@ -203,7 +203,7 @@ export async function enqueueGitHubWebhook(payload: GitHubWebhookPayload) {
 }
 
 export async function enqueueReindexRepository(repositoryId: string) {
-  if (useTrigger()) {
+  if (isTriggerConfigured()) {
     return tasks.trigger<typeof reindexRepositoryTask>(
       "reindex-repository",
       { repositoryId }
@@ -257,7 +257,7 @@ export async function enqueueReindexRepository(repositoryId: string) {
 }
 
 export async function enqueueExecuteAgentRun(agentRunId: string) {
-  if (useTrigger()) {
+  if (isTriggerConfigured()) {
     return tasks.trigger<typeof executeAgentRunTask>("execute-agent-run", {
       agentRunId,
     });

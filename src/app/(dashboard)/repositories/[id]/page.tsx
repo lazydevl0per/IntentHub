@@ -81,6 +81,41 @@ export default async function RepositoryPage({
           </section>
 
           <section className="space-y-4">
+            <h2 className="text-xl font-semibold">Pull Requests</h2>
+            <Card>
+              <CardContent className="divide-y divide-zinc-200 p-0 dark:divide-zinc-800">
+                {repository.pullRequests.length === 0 ? (
+                  <p className="p-6 text-sm text-zinc-500">
+                    No pull requests synced yet.
+                  </p>
+                ) : (
+                  repository.pullRequests.map((pr) => (
+                    <div key={pr.id} className="flex items-start justify-between gap-4 px-6 py-4">
+                      <div>
+                        <a
+                          href={pr.htmlUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium hover:underline"
+                        >
+                          #{pr.number} {pr.title}
+                        </a>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {pr.headBranch} → {pr.baseBranch}
+                          {pr.mergedAt
+                            ? ` · merged ${pr.mergedAt.toLocaleDateString()}`
+                            : ""}
+                        </p>
+                      </div>
+                      <StatusBadge value={pr.state} />
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="space-y-4">
             <h2 className="text-xl font-semibold">Recent Commits</h2>
             <Card>
               <CardContent className="divide-y divide-zinc-200 p-0 dark:divide-zinc-800">

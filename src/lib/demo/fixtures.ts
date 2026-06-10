@@ -287,6 +287,18 @@ export function getDemoRepositoryPageData(repositoryId: string) {
     commits: [demoCommit],
     commitInsights: [demoCommitInsight],
     branches: demoBranches,
+    pullRequests: [
+      {
+        id: "demo-pr-1",
+        number: 42,
+        title: "feat: add Redis caching layer",
+        state: "MERGED",
+        headBranch: "feat/redis-cache",
+        baseBranch: "main",
+        htmlUrl: "https://github.com/intenthub/demo-app/pull/42",
+        mergedAt: now,
+      },
+    ],
   };
 }
 

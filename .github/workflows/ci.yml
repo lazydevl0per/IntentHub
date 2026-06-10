@@ -10,10 +10,29 @@ jobs:
   lint-and-build:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: intenthub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d intenthub"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/intenthub?schema=public
       AUTH_SECRET: ci-test-secret-not-for-production
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      OPENAI_API_KEY: sk-ci-test
+      GITHUB_ID: ci-github-id
+      GITHUB_SECRET: ci-github-secret
+      TRIGGER_SECRET_KEY: tr_ci_test
 
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +46,11 @@ jobs:
 
       - run: npm run lint
 
+      - run: npm run typecheck
+
       - run: npx prisma validate
+
+      - run: npx prisma migrate deploy
 
       - run: npm test
 

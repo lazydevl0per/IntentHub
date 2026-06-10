@@ -62,6 +62,7 @@ export function RepoChat({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
 
   async function loadSession(id: string) {
     const res = await fetch(
@@ -104,6 +105,7 @@ export function RepoChat({
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
+    setChatError("");
 
     const res = await fetch(`/api/repositories/${repositoryId}/chat`, {
       method: "POST",
@@ -113,6 +115,18 @@ export function RepoChat({
         sessionId: sessionId ?? undefined,
       }),
     });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      setChatError(
+        typeof errData.error === "string"
+          ? errData.error
+          : "Failed to send message"
+      );
+      setMessages((prev) => prev.slice(0, -1));
+      setLoading(false);
+      return;
+    }
 
     const newSessionId = res.headers.get("X-Chat-Session-Id");
     if (newSessionId && !sessionId) {
@@ -175,6 +189,7 @@ export function RepoChat({
           </Button>
         </div>
         {demoMode && <DemoReadonlyNotice />}
+        {chatError && <p className="text-sm text-red-600">{chatError}</p>}
         {sessions.length > 0 && (
           <ScrollArea className="h-20">
             <div className="flex flex-wrap gap-2">

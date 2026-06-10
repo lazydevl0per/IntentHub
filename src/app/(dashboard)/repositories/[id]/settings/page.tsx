@@ -104,7 +104,7 @@ export default async function RepositorySettingsPage({
               Endpoint: {appUrl}/api/webhooks/github
             </p>
             <p className="text-zinc-500">
-              Events: push, create, delete
+              Events: push, create, delete, pull_request, check_run
             </p>
             {!repository.githubWebhookId && (
               <p className="text-amber-700 dark:text-amber-400">

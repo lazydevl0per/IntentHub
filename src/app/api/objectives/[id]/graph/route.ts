@@ -54,6 +54,7 @@ export async function GET(
     id: string;
     type: string;
     label: string;
+    href?: string;
     data?: Record<string, unknown>;
   }> = [];
   const edges: Array<{ id: string; source: string; target: string }> = [];
@@ -62,6 +63,7 @@ export async function GET(
     id: `objective-${objective.id}`,
     type: "objective",
     label: objective.title,
+    href: `/objectives/${objective.id}`,
     data: { status: objective.status },
   });
 
@@ -70,6 +72,7 @@ export async function GET(
       id: `plan-${plan.id}`,
       type: "plan",
       label: plan.title,
+      href: `/objectives/${objective.id}`,
       data: { status: plan.status },
     });
     edges.push({
@@ -84,6 +87,7 @@ export async function GET(
       id: `run-${run.id}`,
       type: "agentRun",
       label: run.agentName,
+      href: `/objectives/${objective.id}`,
       data: { status: run.status, model: run.model },
     });
 
@@ -103,6 +107,7 @@ export async function GET(
       id: `eval-${evaluation.id}`,
       type: "evaluation",
       label: `${evaluation.type} (${evaluation.score})`,
+      href: `/objectives/${objective.id}`,
       data: { type: evaluation.type, score: evaluation.score },
     });
 
@@ -124,6 +129,7 @@ export async function GET(
       id: `decision-${objective.decision.id}`,
       type: "decision",
       label: "Decision",
+      href: `/objectives/${objective.id}`,
       data: { rationale: objective.decision.rationale },
     });
     edges.push({
@@ -142,6 +148,7 @@ export async function GET(
           id: `commit-${commit.id}`,
           type: "commit",
           label: commit.sha.slice(0, 7),
+          href: `/repositories/${objective.repositoryId}`,
           data: { message: commit.message },
         });
         edges.push({
@@ -193,6 +200,7 @@ export async function GET(
           id: `commit-${commit.id}`,
           type: "commit",
           label: commit.sha.slice(0, 7),
+          href: `/repositories/${objective.repositoryId}`,
           data: { message: commit.message },
         });
       }

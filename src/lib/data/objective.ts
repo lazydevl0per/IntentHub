@@ -38,6 +38,9 @@ export type ObjectivePageData = {
     promptTokens: number | null;
     completionTokens: number | null;
     errorMessage: string | null;
+    filesChanged: number | null;
+    pullRequestUrl: string | null;
+    pullRequestNumber: number | null;
   }>;
   evaluations: Array<{
     id: string;
