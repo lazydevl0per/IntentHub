@@ -334,24 +334,22 @@ export function ObjectiveWorkflowPanel({
         workflow?.status === "EVALUATING" ||
         workflow?.status === "GENERATING_PLANS") &&
         active && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {workflow.agentRun && (
-              <p className="text-sm">
-                Agent: <StatusBadge value={workflow.agentRun.status} />
+              <div className="flex items-center gap-2 text-sm">
+                <span>Agent:</span>
+                <StatusBadge value={workflow.agentRun.status} />
                 {workflow.agentRun.pullRequestUrl && (
-                  <>
-                    {" "}
-                    <a
-                      href={workflow.agentRun.pullRequestUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline"
-                    >
-                      PR #{workflow.agentRun.pullRequestNumber}
-                    </a>
-                  </>
+                  <a
+                    href={workflow.agentRun.pullRequestUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    PR #{workflow.agentRun.pullRequestNumber}
+                  </a>
                 )}
-              </p>
+              </div>
             )}
             <Button
               type="button"
