@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { fetchRecentRepositoryActivity, isRecencyQuery } from "@/lib/ai/recent-activity";
 import { prisma } from "@/lib/prisma";
 import { createEmbedding, streamChatCompletion, type ChatMessage } from "@/lib/ai/provider";
 import { fullTextSearch } from "@/lib/search";
@@ -189,13 +190,29 @@ export async function buildRagContextWithCitations(
   repositoryId: string,
   query: string
 ) {
-  const [vectorResults, ftsResults] = await Promise.all([
+  const recencyQuery = isRecencyQuery(query);
+
+  const [vectorResults, ftsResults, recentActivity] = await Promise.all([
     vectorSearch(repositoryId, query),
-    fullTextSearch(repositoryId, query, 5),
+    fullTextSearch(repositoryId, query, recencyQuery ? 3 : 5),
+    recencyQuery
+      ? fetchRecentRepositoryActivity(repositoryId)
+      : Promise.resolve(null),
   ]);
 
   const contextParts: string[] = [];
   const citations = new Map<string, RagCitation>();
+
+  if (recentActivity) {
+    contextParts.push(`[RECENT ACTIVITY]\n${recentActivity.text}`);
+    for (const citation of recentActivity.citations) {
+      citations.set(citationKey(citation.entityType, citation.entityId), {
+        entityType: citation.entityType,
+        entityId: citation.entityId,
+        title: citation.title,
+      });
+    }
+  }
 
   for (const result of vectorResults) {
     contextParts.push(
@@ -268,6 +285,7 @@ export function streamRepositoryChatWithCitations(params: {
       {
         role: "system",
         content: `You are IntentHub, an AI assistant that answers questions about a software repository's objectives, plans, decisions, and implementation history. Use only the provided context. If the context is insufficient, say so clearly.
+When the context includes a RECENT ACTIVITY section, treat it as the authoritative timeline for questions about recent, latest, or new changes. Do not infer recency from semantic search results alone.
 
 Context:
 ${context || "No repository knowledge found yet."}`,

@@ -11,6 +11,7 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { rateLimitedResponse } from "@/lib/rate-limit";
 import { omitWebhookSecret } from "@/lib/repository-serializer";
+import { syncCommitIndexLimit } from "@/lib/sync-limits";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -31,7 +32,9 @@ export async function POST(
   if (!member) return notFound();
 
   try {
-    const handle = await enqueueSyncRepository(id, { commitLimit: 20 });
+    const handle = await enqueueSyncRepository(id, {
+      commitLimit: syncCommitIndexLimit(),
+    });
     const repository = await prisma.repository.findUnique({
       where: { id },
     });

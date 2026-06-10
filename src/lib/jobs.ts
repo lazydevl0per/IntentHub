@@ -33,6 +33,7 @@ import {
   handlePushWebhook,
 } from "@/lib/github";
 import { isAiConfigured } from "@/lib/ai/provider";
+import { syncCommitIndexLimit } from "@/lib/sync-limits";
 
 function isTriggerConfigured() {
   return Boolean(process.env.TRIGGER_SECRET_KEY);
@@ -139,7 +140,7 @@ export async function enqueueSyncRepository(
     return null;
   }
 
-  const limit = options?.commitLimit ?? 20;
+  const limit = options?.commitLimit ?? syncCommitIndexLimit();
   const commits = await prisma.gitCommit.findMany({
     where: { repositoryId },
     take: limit,

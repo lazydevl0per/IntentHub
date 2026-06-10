@@ -21,6 +21,7 @@ type ChatSession = {
 };
 
 const suggestions = [
+  "What changed recently?",
   "Why was this architecture chosen?",
   "What alternatives were rejected?",
   "Which objectives are still active?",

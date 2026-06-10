@@ -9,6 +9,7 @@ import {
   indexPlan,
 } from "@/lib/indexing";
 import { prisma } from "@/lib/prisma";
+import { syncCommitIndexLimit } from "@/lib/sync-limits";
 import { isAiConfigured } from "@/lib/ai/provider";
 
 export type IndexEntityPayload =
@@ -63,7 +64,7 @@ export const syncRepositoryTask = task({
       return { synced: true, indexedCommits: 0 };
     }
 
-    const limit = payload.commitLimit ?? 20;
+    const limit = payload.commitLimit ?? syncCommitIndexLimit();
     const commits = await prisma.gitCommit.findMany({
       where: { repositoryId: payload.repositoryId },
       take: limit,
