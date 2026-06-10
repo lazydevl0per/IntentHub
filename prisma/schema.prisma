@@ -47,6 +47,17 @@ enum EvaluationType {
   QUALITY
 }
 
+enum WorkflowStatus {
+  GENERATING_PLANS
+  AWAITING_PLAN_APPROVAL
+  RUNNING_AGENT
+  EVALUATING
+  AWAITING_DECISION_APPROVAL
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 enum DocumentEntityType {
   OBJECTIVE
   PLAN
@@ -76,6 +87,7 @@ model User {
   evaluations        Evaluation[]
   decisions          Decision[]
   chatSessions       ChatSession[]
+  objectiveWorkflows ObjectiveWorkflow[]
 }
 
 model Account {
@@ -179,8 +191,29 @@ model Objective {
   technicalSummary   String? @db.Text
   risks              String? @db.Text
   architectureImpact String? @db.Text
+  workflow           ObjectiveWorkflow?
 
   @@index([repositoryId])
+  @@index([status])
+}
+
+model ObjectiveWorkflow {
+  id                   String         @id @default(cuid())
+  objectiveId          String         @unique
+  status               WorkflowStatus @default(GENERATING_PLANS)
+  model                String
+  selectedPlanId       String?
+  agentRunId           String?
+  recommendedPlanId    String?
+  recommendedRationale String?        @db.Text
+  errorMessage         String?        @db.Text
+  createdById          String
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  objective Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id])
+
   @@index([status])
 }
 
