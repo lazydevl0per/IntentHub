@@ -40,7 +40,7 @@ Internal production target: Vercel + Neon Postgres + Trigger.dev.
 5. Optional:
    - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (distributed rate limiting)
    - `SENTRY_DSN` (error tracking)
-   - `HEALTH_CHECK_TOKEN` (detailed health endpoint for monitoring)
+   - `HEALTH_CHECK_TOKEN` (detailed `/api/health` `services` block and `npm run verify:production` in production)
 
 ### 3. GitHub OAuth App
 
@@ -69,7 +69,8 @@ Manual checks:
 2. Connect a repository
 3. Run **Reindex search** on repository settings
 4. Push a commit and confirm webhook sync
-5. Complete one objective lifecycle (plan → agent run → decision)
+5. Complete one objective lifecycle (plan → agent run → pull request → decision)
+6. Optional: run an agent on a plan and confirm a GitHub PR is opened when file edits are applied
 
 ## Migration Hygiene
 

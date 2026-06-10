@@ -12,6 +12,9 @@ See `.env.example` for all variables. Production requires:
 | `OPENAI_API_KEY` | Embeddings, chat, agents |
 | `GITHUB_ID` / `GITHUB_SECRET` | GitHub OAuth |
 | `TRIGGER_SECRET_KEY` | Background jobs (required in prod) |
+| `HEALTH_CHECK_TOKEN` | Detailed health checks and `verify:production` |
+| `SENTRY_DSN` | Error tracking (optional) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Distributed rate limits (optional) |
 
 Never set `DEMO_MODE=true` in production.
 
@@ -49,13 +52,33 @@ Never set `DEMO_MODE=true` in production.
 
 ### Webhook failures
 
-**Symptoms**: Pushes don't sync, webhook status "Not registered"
+**Symptoms**: Pushes don't sync, pull requests stale, webhook status "Not registered"
 
 **Actions**:
 1. Verify `NEXT_PUBLIC_APP_URL` matches production domain
 2. Reconnect repository or re-save settings to re-register webhook
 3. Check GitHub repo webhook delivery logs
 4. Confirm `webhookSecret` was not rotated without re-registration
+5. Use manual **Sync** on the repository page to refresh commits, branches, and pull requests
+
+### Agent runs stuck or missing PRs
+
+**Symptoms**: Agent run `FAILED`, no pull request link on objective page
+
+**Actions**:
+1. Confirm the user who started the run has GitHub OAuth linked with `repo` scope
+2. Check Trigger.dev run logs for `execute-agent-run`
+3. Verify the repository default branch exists and the agent branch was created on GitHub
+4. PRs are only opened when the agent applies at least one file edit
+
+### CI evaluations not appearing
+
+**Symptoms**: Agent branch merged but no evaluation from GitHub Actions
+
+**Actions**:
+1. Confirm webhook delivers `check_run` events
+2. Branch name on the agent run must match `check_run.head_branch`
+3. Only completed check runs create evaluations; re-deliver from GitHub webhook logs if needed
 
 ## Backup Strategy
 
@@ -84,7 +107,7 @@ Never set `DEMO_MODE=true` in production.
 
 - Use a dedicated production GitHub OAuth app (separate from dev)
 - Do not use seed account `demo@intenthub.dev` in production
-- Team access via shared GitHub org repos (invite flow deferred)
+- Repository invites can be created via `POST /api/repositories/[id]/invites` (owners); email delivery and acceptance are not wired yet
 
 ## Operational Commands
 

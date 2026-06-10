@@ -7,16 +7,27 @@ IntentHub is an AI-native collaboration layer on top of Git. It preserves object
 ## Features
 
 - **Authentication** — email/password registration and GitHub OAuth
-- **Repository integration** — connect GitHub repos, sync commits/branches, auto-register webhooks
+- **Repository integration** — connect GitHub repos, sync commits/branches/pull requests, auto-register webhooks
 - **Objectives** — create, edit, and track work with status and priority
 - **Plans** — multiple implementation approaches per objective
-- **Agent runs** — record runs manually or execute an AI agent on a plan (creates a Git branch + implementation report)
+- **Agent runs** — record runs manually or execute an AI agent on a plan (branch, file edits, implementation report, and pull request when changes are made)
 - **Evaluations** — test, benchmark, security, and quality results
 - **Decision records** — capture the winning plan, rationale, and linked commit
 - **Objective summaries** — AI-generated business/technical summaries when a decision is recorded
 - **Semantic commit insights** — intent, architecture impact, and test status on synced commits
 - **Repository chat** — hybrid RAG (vector + full-text search) with persistent chat sessions
 - **Knowledge graph** — interactive view of objective → plan → run → evaluation → decision → commit
+- **CI-linked evaluations** — GitHub `check_run` webhooks on agent branches create test evaluations automatically
+
+## Screenshots
+
+| Dashboard | Repository |
+|-----------|------------|
+| ![Dashboard](images/dashboard.png) | ![Repository](images/repository.png) |
+
+| Objective | Knowledge graph |
+|-----------|-----------------|
+| ![Objective](images/objective.png) | ![Knowledge graph](images/knowledgegraph.png) |
 
 ## Stack
 
@@ -89,6 +100,9 @@ cp .env.example .env
 | `GITHUB_WEBHOOK_SECRET` | Optional | Fallback webhook secret if per-repo secret is unset |
 | `GITHUB_SYNC_COMMIT_LIMIT` | Optional | Max commits per sync (default `500`) |
 | `GITHUB_SYNC_BRANCH_LIMIT` | Optional | Max branches per sync (default `100`) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional | Distributed rate limiting for chat and agent endpoints |
+| `SENTRY_DSN` | Optional | Error tracking (client + server) |
+| `HEALTH_CHECK_TOKEN` | Optional | Bearer token for detailed `/api/health` and `npm run verify:production` in production |
 
 ### 3. Install and migrate
 
@@ -135,6 +149,8 @@ POST /api/webhooks/github
 
 Events: `push`, `create`, `delete`, `pull_request`, `check_run`
 
+`pull_request` keeps the repository PR list in sync. `check_run` creates test evaluations for agent branches when CI completes.
+
 Check webhook status on the repository **Settings** page. If auto-registration fails, verify `NEXT_PUBLIC_APP_URL` is correct.
 
 For local development without a public URL, use [smee.io](https://smee.io) or ngrok to tunnel webhooks, or rely on manual **Sync** from the repository page.
@@ -149,7 +165,7 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
    - Run migrations: `npx prisma migrate deploy`
 4. Set `NEXT_PUBLIC_APP_URL` to your production URL
 5. Update the GitHub OAuth callback to `https://<your-domain>/api/auth/callback/github`
-6. Verify health: `GET /api/health` — expect `{ status: "ok", db: "connected", services: { ... } }`
+6. Verify health: `GET /api/health` — expect `{ status: "ok", db: "connected" }`. For the `services` block in production, send `Authorization: Bearer <HEALTH_CHECK_TOKEN>`
 7. Deploy Trigger.dev tasks: `npm run deploy:trigger`
 8. Connect a repository, create an objective, and trigger **Reindex search** on the repository settings page
 9. Confirm GitHub webhooks arrive at `/api/webhooks/github` after a push
@@ -159,8 +175,8 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
 | Check | How |
 |-------|-----|
 | Database | `GET /api/health` returns `db: "connected"` |
-| Background jobs | `services.trigger: true` in health response after setting `TRIGGER_SECRET_KEY` |
-| AI features | `services.openai: true` (or `anthropic: true`) in health response |
+| Background jobs | `services.trigger: true` in detailed health response (`Authorization: Bearer <HEALTH_CHECK_TOKEN>`) |
+| AI features | `services.openai: true` (or `anthropic: true`) in detailed health response |
 | GitHub OAuth | Sign in with GitHub and connect a repository |
 | Search index | Use **Reindex search** on repository settings after connecting |
 | Webhooks | Push a commit; repository sync updates without manual sync |
@@ -171,7 +187,7 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
 |-------|-------------|
 | `/login`, `/register` | Authentication |
 | `/` | Dashboard — repos, active objectives, recent decisions |
-| `/repositories/[id]` | Objectives, commits with semantic insights, RAG chat |
+| `/repositories/[id]` | Objectives, pull requests, commits with semantic insights, RAG chat |
 | `/repositories/[id]/settings` | Sync, webhook status, branches, agent prompt, disconnect |
 | `/objectives/[id]` | Plans, agent runs, evaluations, decision, AI summary |
 | `/knowledge-graph/[objectiveId]` | Interactive knowledge graph |
@@ -181,6 +197,8 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
 ### Auth
 
 - `POST /api/auth/register` — email/password registration
+- `POST /api/auth/verify-email/send` — issue verification token (mail delivery not configured)
+- `GET /api/auth/verify-email/confirm?token=` — confirm email address
 
 ### Repositories
 
@@ -195,6 +213,7 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
 - `GET/POST /api/repositories/[id]/objectives` — list/create objectives
 - `GET/POST /api/repositories/[id]/chat` — list chat sessions / send message (streamed)
 - `GET /api/repositories/[id]/chat/sessions/[sessionId]` — load chat session messages
+- `GET/POST /api/repositories/[id]/invites` — list or create repository invites (owners only; acceptance flow not wired yet)
 
 ### Objectives
 
@@ -210,7 +229,7 @@ For local development without a public URL, use [smee.io](https://smee.io) or ng
 
 ### System
 
-- `GET /api/health` — database connectivity check
+- `GET /api/health` — liveness check; includes `services` when authorized (see `HEALTH_CHECK_TOKEN`)
 - `POST /api/webhooks/github` — GitHub webhook handler
 
 ## Background Jobs
@@ -221,10 +240,20 @@ When `TRIGGER_SECRET_KEY` is set, these run asynchronously via Trigger.dev:
 |-----|---------|
 | `sync-repository` | Repo connect, manual sync |
 | `index-entity` | Entity create/update |
-| `github-webhook` | GitHub push/branch events |
+| `github-webhook` | GitHub push, branch, pull request, and check_run events |
 | `analyze-commit` | After commit indexing |
 | `generate-objective-summary` | After decision recorded |
 | `execute-agent-run` | Agent execution requested |
 | `reindex-repository` | Manual reindex from repository settings |
 
 Without Trigger.dev, the same work runs inline in the API process (fine for local testing, not ideal for production).
+
+## Development
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+```
+
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, Prisma migrate deploy, tests, and build on push/PR to `main` or `master`.
