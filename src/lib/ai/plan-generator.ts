@@ -9,9 +9,46 @@ export type GeneratedPlan = {
   approach: string;
 };
 
-type PlanGenerationResult = {
-  plans: GeneratedPlan[];
+type RawGeneratedPlan = {
+  title?: unknown;
+  description?: unknown;
+  approach?: unknown;
 };
+
+type PlanGenerationResult = {
+  plans: RawGeneratedPlan[];
+};
+
+function normalizePlanText(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item.trim() : String(item)))
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (value == null) {
+    return "";
+  }
+
+  return String(value).trim();
+}
+
+export function normalizeGeneratedPlan(plan: RawGeneratedPlan): GeneratedPlan | null {
+  const title = normalizePlanText(plan.title);
+  const description = normalizePlanText(plan.description);
+  const approach = normalizePlanText(plan.approach);
+
+  if (!title || !description || !approach) {
+    return null;
+  }
+
+  return { title, description, approach };
+}
 
 export async function generatePlansForObjective(params: {
   objectiveId: string;
@@ -72,7 +109,7 @@ export async function generatePlansForObjective(params: {
       {
         role: "system",
         content:
-          "You generate competing implementation plans for software objectives. Return JSON with key plans: an array of 2-3 objects, each with title, description, and approach (concrete technical steps). Plans must be meaningfully different approaches.",
+          "You generate competing implementation plans for software objectives. Return JSON with key plans: an array of 2-3 objects. Each object must have title (string), description (string), and approach (single string with concrete technical steps, not an array). Plans must be meaningfully different approaches.",
       },
       {
         role: "user",
@@ -85,5 +122,14 @@ export async function generatePlansForObjective(params: {
     throw new Error("AI returned no plans");
   }
 
-  return result.plans.slice(0, 3);
+  const normalized = result.plans
+    .map(normalizeGeneratedPlan)
+    .filter((plan): plan is GeneratedPlan => plan !== null)
+    .slice(0, 3);
+
+  if (!normalized.length) {
+    throw new Error("AI returned invalid plan data");
+  }
+
+  return normalized;
 }
