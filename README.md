@@ -126,11 +126,27 @@ flowchart TD
   I --> J[Ask Repository / Knowledge Graph]
 ```
 
+**Manual path** — step through each tab yourself.
+
+**AI-assisted path** — start a workflow from the objective page:
+
+```mermaid
+flowchart TD
+  O[Create Objective] --> W[Start AI Workflow]
+  W --> P[AI generates 2-3 plans]
+  P --> G1[Gate 1: Review plans]
+  G1 --> S[AI selects best plan]
+  S --> R[Run agent on 1 plan]
+  R --> EV[CI eval + AI quality eval]
+  EV --> G2[Gate 2: Approve decision]
+  G2 --> I[AI Summary + Indexed Knowledge]
+```
+
 1. **Connect** a GitHub repository — commits, branches, and PRs sync automatically.
-2. **Define** an objective and add competing implementation plans.
-3. **Execute** an agent on a plan — it reads the repo, applies edits, opens a PR.
-4. **Evaluate** via manual entry or CI `check_run` webhooks on agent branches.
-5. **Decide** which plan wins and why — IntentHub generates a summary and indexes everything for search.
+2. **Define** an objective and add competing implementation plans — or click **Start AI Workflow** to have AI generate plans from repo context.
+3. **Execute** an agent on a plan — manually or via the assisted workflow, which picks the best plan and runs it automatically.
+4. **Evaluate** via manual entry, CI `check_run` webhooks on agent branches, or AI-generated quality evaluations.
+5. **Decide** which plan wins and why — manually or by approving the AI recommendation at Gate 2. IntentHub generates a summary and indexes everything for search.
 
 ---
 
@@ -147,10 +163,15 @@ flowchart TD
 - Multiple plans per objective (selected / rejected)
 - Decision records with rationale and linked commit
 - Interactive knowledge graph per objective
+- Manual step-by-step flow remains available alongside the AI-assisted workflow
 
 ### AI capabilities
+- **AI-assisted workflow** — generate competing plans from an objective and repository context
+- **AI plan selection** — ranks plans and runs the best one automatically
 - **Ask Repository** — hybrid RAG (vector + full-text) with persistent chat sessions
 - **Agent runs** — execute on a plan; creates branch, file edits, report, and PR
+- **AI evaluations** — QUALITY evaluation from agent output when CI is unavailable
+- **AI decision recommendation** — suggests winning plan and rationale (user approves before recording)
 - **Objective summaries** — generated when a decision is recorded
 - **CI-linked evaluations** — `check_run` webhooks on agent branches create test evaluations automatically
 
@@ -355,7 +376,7 @@ NEXT_PUBLIC_APP_URL=https://your-app.vercel.app npm run verify:production
 | `/` | Dashboard — repos, active objectives, recent decisions |
 | `/repositories/[id]` | Objectives, pull requests, commits with semantic insights, RAG chat |
 | `/repositories/[id]/settings` | Sync, webhook status, branches, agent prompt, disconnect |
-| `/objectives/[id]` | Plans, agent runs, evaluations, decision, AI summary |
+| `/objectives/[id]` | AI-assisted workflow panel, plans, agent runs, evaluations, decision, AI summary |
 | `/knowledge-graph/[objectiveId]` | Interactive knowledge graph |
 
 ---
@@ -406,6 +427,10 @@ NEXT_PUBLIC_APP_URL=https://your-app.vercel.app npm run verify:production
 | `GET` | `/api/agent-runs/[id]` | Agent run status |
 | `POST` | `/api/objectives/[id]/evaluations` | Record evaluation |
 | `POST` | `/api/objectives/[id]/decision` | Record decision (triggers objective summary) |
+| `GET` / `POST` | `/api/objectives/[id]/workflow` | Workflow status / start AI-assisted workflow |
+| `POST` | `/api/objectives/[id]/workflow/approve-plans` | Gate 1 — approve generated plans |
+| `POST` | `/api/objectives/[id]/workflow/approve-decision` | Gate 2 — approve AI decision recommendation |
+| `POST` | `/api/objectives/[id]/workflow/cancel` | Cancel in-progress workflow |
 | `GET` | `/api/objectives/[id]/graph` | Knowledge graph data |
 
 </details>
@@ -434,6 +459,7 @@ When `TRIGGER_SECRET_KEY` is set, these run asynchronously via Trigger.dev:
 | `analyze-commit` | After commit indexing |
 | `generate-objective-summary` | After decision recorded |
 | `execute-agent-run` | Agent execution requested |
+| `run-objective-workflow-step` | Workflow step execution (plan generation, agent resume, evaluation, recommendation) |
 | `reindex-repository` | Manual reindex from repository settings |
 
 Without Trigger.dev, the same work runs inline in the API process (fine for local testing, not ideal for production).
