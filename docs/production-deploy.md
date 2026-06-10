@@ -8,7 +8,7 @@ Internal production target: Vercel + Neon Postgres + Trigger.dev.
 - **Database**: Neon PostgreSQL with pgvector
 - **Jobs**: Trigger.dev workers
 - **Auth**: NextAuth (credentials + GitHub OAuth)
-- **AI**: OpenAI (required), optional Anthropic for chat
+- **AI**: Google Gemini or OpenAI (required), optional Anthropic for chat
 
 ## Provisioning Checklist
 
@@ -33,7 +33,7 @@ Internal production target: Vercel + Neon Postgres + Trigger.dev.
    - `DATABASE_URL`
    - `AUTH_SECRET` (32+ random bytes)
    - `NEXT_PUBLIC_APP_URL` (production URL)
-   - `OPENAI_API_KEY`
+   - `GOOGLE_AI_API_KEY` (when `AI_PROVIDER=google`) **or** `OPENAI_API_KEY`
    - `GITHUB_ID` / `GITHUB_SECRET`
    - `TRIGGER_SECRET_KEY`
 4. Ensure `DEMO_MODE` is **unset** or `false`

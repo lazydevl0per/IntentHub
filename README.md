@@ -205,7 +205,7 @@ For full functionality, continue to [Local setup](#local-setup).
 - Node.js 20+
 - Docker (for local PostgreSQL)
 - GitHub OAuth app (for repo connection)
-- OpenAI API key (for AI features)
+- AI API key — [Google AI Studio](https://aistudio.google.com/) (free tier, recommended) or OpenAI
 - Trigger.dev account (recommended for background jobs)
 
 ### 1. Start PostgreSQL
@@ -227,19 +227,32 @@ cp .env.example .env
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `AUTH_SECRET` | Yes | Session secret (`openssl rand -base64 32`) |
 | `GITHUB_ID` / `GITHUB_SECRET` | For GitHub | OAuth app credentials |
-| `OPENAI_API_KEY` | For AI | Embeddings, chat, summaries, commit insights, agents |
+| `GOOGLE_AI_API_KEY` | For AI (Gemini) | Free-tier option from Google AI Studio; embeddings + chat |
+| `OPENAI_API_KEY` | For AI (OpenAI) | Embeddings, chat, summaries, commit insights, agents |
 | `NEXT_PUBLIC_APP_URL` | Yes | App URL (e.g. `http://localhost:3000`) — used for webhook registration |
 | `TRIGGER_SECRET_KEY` | Optional | Trigger.dev secret key; without it, jobs run inline |
 | `TRIGGER_PROJECT_REF` | Optional | Trigger.dev project ref |
-| `AI_PROVIDER` | Optional | `openai` (default) or `anthropic` for chat |
-| `AI_CHAT_MODEL` | Optional | Chat model (default `gpt-4o-mini`) |
-| `ANTHROPIC_API_KEY` | If using Anthropic | Required when `AI_PROVIDER=anthropic` |
+| `AI_PROVIDER` | Optional | `google` (default in `.env.example`), `openai`, or `anthropic` |
+| `AI_CHAT_MODEL` | Optional | Chat model (default `gemini-2.0-flash` with Google, `gpt-4o-mini` with OpenAI) |
+| `AI_EMBEDDING_MODEL` | Optional | Embedding model (default `gemini-embedding-001` or `text-embedding-3-small`) |
+| `ANTHROPIC_API_KEY` | If using Anthropic | Required when `AI_PROVIDER=anthropic` (OpenAI still needed for embeddings) |
 | `GITHUB_WEBHOOK_SECRET` | Optional | Fallback webhook secret if per-repo secret is unset |
 | `GITHUB_SYNC_COMMIT_LIMIT` | Optional | Max commits per sync (default `500`) |
 | `GITHUB_SYNC_BRANCH_LIMIT` | Optional | Max branches per sync (default `100`) |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional | Distributed rate limiting for chat and agent endpoints |
 | `SENTRY_DSN` | Optional | Error tracking (client + server) |
 | `HEALTH_CHECK_TOKEN` | Optional | Bearer token for detailed `/api/health` and `npm run verify:production` in production |
+
+**Free tier (Google Gemini)** — set in `.env`:
+
+```env
+AI_PROVIDER=google
+GOOGLE_AI_API_KEY=<your-key-from-aistudio.google.com>
+AI_CHAT_MODEL=gemini-2.0-flash
+AI_EMBEDDING_MODEL=gemini-embedding-001
+```
+
+If you switch embedding providers on an existing database, reindex each repository (**Reindex search** on repository settings) so vector search uses consistent embeddings.
 
 ### 3. Install and migrate
 
@@ -323,7 +336,7 @@ See [docs/production-deploy.md](docs/production-deploy.md) for the full provisio
 |-------|-----|
 | Database | `GET /api/health` returns `db: "connected"` |
 | Background jobs | `services.trigger: true` in detailed health response (`Authorization: Bearer <HEALTH_CHECK_TOKEN>`) |
-| AI features | `services.openai: true` (or `anthropic: true`) in detailed health response |
+| AI features | `services.aiConfigured: true` in detailed health response (`google` or `openai` key set per `AI_PROVIDER`) |
 | GitHub OAuth | Sign in with GitHub and connect a repository |
 | Search index | Use **Reindex search** on repository settings after connecting |
 | Webhooks | Push a commit; repository sync updates without manual sync |
@@ -444,7 +457,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, Prisma migrate deploy, tes
 | Frontend | Next.js 15, TypeScript, Tailwind CSS, shadcn/ui-style components |
 | Database | PostgreSQL, Prisma, pgvector |
 | Auth | NextAuth (credentials + GitHub OAuth) |
-| AI | OpenAI (embeddings + chat), optional Anthropic for chat |
+| AI | Google Gemini or OpenAI (embeddings + chat), optional Anthropic for chat |
 | Git | GitHub API + webhooks |
 | Jobs | Trigger.dev |
 

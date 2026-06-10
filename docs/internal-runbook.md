@@ -9,7 +9,8 @@ See `.env.example` for all variables. Production requires:
 | `DATABASE_URL` | Neon Postgres connection |
 | `AUTH_SECRET` | Session encryption |
 | `NEXT_PUBLIC_APP_URL` | OAuth callbacks, webhooks |
-| `OPENAI_API_KEY` | Embeddings, chat, agents |
+| `GOOGLE_AI_API_KEY` | Embeddings + chat when `AI_PROVIDER=google` |
+| `OPENAI_API_KEY` | Embeddings + chat when `AI_PROVIDER=openai` |
 | `GITHUB_ID` / `GITHUB_SECRET` | GitHub OAuth |
 | `TRIGGER_SECRET_KEY` | Background jobs (required in prod) |
 | `HEALTH_CHECK_TOKEN` | Detailed health checks and `verify:production` |
@@ -40,15 +41,16 @@ Never set `DEMO_MODE=true` in production.
 3. Re-deploy tasks: `npm run deploy:trigger`
 4. Use manual **Sync** on repository page as fallback (limited, may timeout on Vercel)
 
-### OpenAI rate limits / errors
+### AI provider rate limits / errors
 
 **Symptoms**: Chat fails, agent runs fail, commit insights missing
 
 **Actions**:
-1. Check OpenAI usage dashboard
+1. Check Google AI Studio or OpenAI usage dashboard (whichever `AI_PROVIDER` is set)
 2. Review rate limits on chat and agent-execute endpoints
 3. Temporarily reduce `GITHUB_SYNC_COMMIT_LIMIT`
 4. Retry failed agent runs from objective page
+5. After switching embedding providers, run **Reindex search** on affected repositories
 
 ### Webhook failures
 
@@ -93,12 +95,13 @@ Never set `DEMO_MODE=true` in production.
 | `AUTH_SECRET` | Generate new value in Vercel, redeploy (invalidates all sessions) |
 | `GITHUB_SECRET` | Update OAuth app + Vercel env, redeploy |
 | Webhook secrets | Per-repo; disconnect and reconnect repository |
+| `GOOGLE_AI_API_KEY` | Rotate in Google AI Studio, update Vercel env; reindex repos if embeddings changed |
 | `OPENAI_API_KEY` | Rotate in OpenAI dashboard, update Vercel env |
 | `TRIGGER_SECRET_KEY` | Regenerate in Trigger.dev, redeploy app + workers |
 
 ## Cost Monitoring
 
-- **OpenAI**: Monitor token usage from agent runs in OpenAI dashboard
+- **Google AI / OpenAI**: Monitor token usage from agent runs in the active provider dashboard
 - **Neon**: Set compute autoscaling limits; watch storage growth from `DocumentChunk`
 - **Trigger.dev**: Review run minutes in Trigger dashboard
 - **Upstash** (if used): Monitor Redis command volume for rate limiting
