@@ -9,6 +9,7 @@ import {
   EditPlanDialog,
 } from "@/components/objective-forms";
 import { ObjectiveSummary } from "@/components/objective-summary";
+import { ObjectiveWorkflowPanel } from "@/components/objective-workflow-panel";
 import { RunAgentButton, RunAgentForm } from "@/components/run-agent-form";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,12 @@ export default async function ObjectivePage({
       {objective.status === "COMPLETED" && (
         <ObjectiveSummary objective={objective} />
       )}
+
+      <ObjectiveWorkflowPanel
+        objectiveId={objective.id}
+        demoMode={demoMode}
+        hasDecision={Boolean(objective.decision)}
+      />
 
       <Tabs defaultValue="plans">
         <TabsList>

@@ -14,6 +14,11 @@ const statusVariants: Record<string, "default" | "secondary" | "success" | "warn
   MEDIUM: "secondary",
   HIGH: "warning",
   CRITICAL: "destructive",
+  GENERATING_PLANS: "default",
+  AWAITING_PLAN_APPROVAL: "warning",
+  EVALUATING: "default",
+  AWAITING_DECISION_APPROVAL: "warning",
+  CANCELLED: "outline",
 };
 
 export function StatusBadge({ value }: { value: string }) {

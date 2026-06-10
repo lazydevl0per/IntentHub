@@ -21,6 +21,62 @@ async function pollAgentRun(agentRunId: string): Promise<AgentRunStatus> {
   return data.status as AgentRunStatus;
 }
 
+export function RunAgentButton({
+  objectiveId,
+  planId,
+  demoMode,
+}: {
+  objectiveId: string;
+  planId: string;
+  demoMode?: boolean;
+}) {
+  const router = useRouter();
+  const [model, setModel] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/models")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.length > 0) setModel(data[0]);
+      });
+  }, []);
+
+  async function handleRun() {
+    if (!model) return;
+    setLoading(true);
+
+    const res = await fetch(
+      `/api/objectives/${objectiveId}/agent-runs/execute`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId, model }),
+      }
+    );
+
+    if (res.ok) {
+      router.refresh();
+    }
+
+    setLoading(false);
+  }
+
+  if (demoMode) return null;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={handleRun}
+      disabled={loading || !model}
+    >
+      {loading ? "..." : "Run"}
+    </Button>
+  );
+}
+
 export function RunAgentForm({
   objectiveId,
   plans,
