@@ -49,7 +49,7 @@ function getChatModel() {
     return process.env.AI_CHAT_MODEL;
   }
   if (getProvider() === "google") {
-    return "gemini-2.0-flash";
+    return "gemini-2.5-flash";
   }
   return "gpt-4o-mini";
 }
