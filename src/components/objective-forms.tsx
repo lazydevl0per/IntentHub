@@ -368,6 +368,12 @@ export function CreateDecisionForm({
       <h4 className="font-medium">
         {hasExistingDecision ? "Revise Decision" : "Record Decision"}
       </h4>
+      {hasExistingDecision && (
+        <p className="text-sm text-zinc-500">
+          Switch the winning plan after exploring an alternative. Leave commit
+          blank to auto-link the merged pull request for the selected plan.
+        </p>
+      )}
       <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
         <SelectTrigger>
           <SelectValue placeholder="Select winning plan" />
@@ -400,7 +406,11 @@ export function CreateDecisionForm({
         </SelectContent>
       </Select>
       <Button type="submit" disabled={loading || !selectedPlanId}>
-        Record Decision
+        {loading
+          ? "Saving..."
+          : hasExistingDecision
+            ? "Update Decision"
+            : "Record Decision"}
       </Button>
     </form>
   );

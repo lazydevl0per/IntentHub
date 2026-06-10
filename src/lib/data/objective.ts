@@ -29,6 +29,7 @@ export type ObjectivePageData = {
   }>;
   agentRuns: Array<{
     id: string;
+    planId: string | null;
     agentName: string;
     model: string | null;
     prompt: string;
@@ -44,11 +45,13 @@ export type ObjectivePageData = {
   }>;
   evaluations: Array<{
     id: string;
+    agentRunId: string | null;
     type: string;
     score: number;
     summary: string;
   }>;
   decision: {
+    selectedPlanId: string;
     selectedPlan: { title: string };
     rationale: string;
     linkedCommitSha: string | null;

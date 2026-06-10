@@ -8,6 +8,7 @@ import {
   EditObjectiveDialog,
   EditPlanDialog,
 } from "@/components/objective-forms";
+import { CompletedObjectivePanel } from "@/components/completed-objective-panel";
 import { ObjectiveSummary } from "@/components/objective-summary";
 import { ObjectiveWorkflowPanel } from "@/components/objective-workflow-panel";
 import { RunAgentButton, RunAgentForm } from "@/components/run-agent-form";
@@ -79,6 +80,17 @@ export default async function ObjectivePage({
         <ObjectiveSummary objective={objective} />
       )}
 
+      {objective.status === "COMPLETED" && objective.decision && (
+        <CompletedObjectivePanel
+          objectiveId={objective.id}
+          plans={objective.plans}
+          agentRuns={objective.agentRuns}
+          evaluations={objective.evaluations}
+          decision={objective.decision}
+          demoMode={demoMode}
+        />
+      )}
+
       <ObjectiveWorkflowPanel
         objectiveId={objective.id}
         demoMode={demoMode}
@@ -105,6 +117,11 @@ export default async function ObjectivePage({
                     <RunAgentButton
                       objectiveId={objective.id}
                       planId={plan.id}
+                      planTitle={plan.title}
+                      planStatus={plan.status}
+                      objectiveStatus={objective.status}
+                      selectedPlanId={objective.decision?.selectedPlanId}
+                      hasDecision={Boolean(objective.decision)}
                       demoMode={demoMode}
                     />
                     <EditPlanDialog
@@ -184,7 +201,14 @@ export default async function ObjectivePage({
           )}
           <RunAgentForm
             objectiveId={objective.id}
-            plans={objective.plans.map((p) => ({ id: p.id, title: p.title }))}
+            plans={objective.plans.map((p) => ({
+              id: p.id,
+              title: p.title,
+              status: p.status,
+            }))}
+            objectiveStatus={objective.status}
+            selectedPlanId={objective.decision?.selectedPlanId}
+            hasDecision={Boolean(objective.decision)}
             demoMode={demoMode}
           />
           <CreateAgentRunForm
