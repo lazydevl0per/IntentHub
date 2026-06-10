@@ -11,13 +11,29 @@ export function commitsMatch(linkedSha: string, commitSha: string) {
 
 export async function linkDecisionToCommit(
   objectiveId: string,
-  commitSha: string
+  commitSha: string,
+  options?: { planId?: string }
 ) {
   const decision = await prisma.decision.findUnique({
     where: { objectiveId },
   });
 
-  if (!decision || decision.linkedCommitSha) {
+  if (!decision) {
+    return null;
+  }
+
+  if (
+    decision.linkedCommitSha &&
+    commitsMatch(decision.linkedCommitSha, commitSha)
+  ) {
+    return decision;
+  }
+
+  if (decision.linkedCommitSha && options?.planId) {
+    if (decision.selectedPlanId !== options.planId) {
+      return decision;
+    }
+  } else if (decision.linkedCommitSha && !options?.planId) {
     return decision;
   }
 
@@ -44,20 +60,22 @@ export async function linkDecisionToCommit(
 export async function resolveLinkedCommitForObjective(objectiveId: string) {
   const decision = await prisma.decision.findUnique({
     where: { objectiveId },
-    select: { linkedCommitSha: true },
+    select: { linkedCommitSha: true, selectedPlanId: true },
   });
 
-  if (decision?.linkedCommitSha) {
+  if (!decision) {
+    return null;
+  }
+
+  if (decision.linkedCommitSha) {
     return decision.linkedCommitSha;
   }
 
-  const deployment = await prisma.deployment.findFirst({
-    where: { objectiveId },
-    orderBy: { deployedAt: "desc" },
-    select: { commitSha: true },
-  });
-
-  return deployment?.commitSha ?? null;
+  const { resolveMergedCommitForPlan } = await import("@/lib/github");
+  return (
+    (await resolveMergedCommitForPlan(objectiveId, decision.selectedPlanId)) ??
+    null
+  );
 }
 
 export async function recordDecision(params: {
@@ -78,19 +96,30 @@ export async function recordDecision(params: {
     throw new Error("Selected plan does not belong to this objective");
   }
 
+  let linkedCommitSha: string | null = params.linkedCommitSha ?? null;
+
+  if (params.linkedCommitSha === undefined) {
+    const { resolveMergedCommitForPlan } = await import("@/lib/github");
+    linkedCommitSha =
+      (await resolveMergedCommitForPlan(
+        params.objectiveId,
+        params.selectedPlanId
+      )) ?? null;
+  }
+
   const decision = await prisma.decision.upsert({
     where: { objectiveId: params.objectiveId },
     create: {
       objectiveId: params.objectiveId,
       selectedPlanId: params.selectedPlanId,
       rationale: params.rationale,
-      linkedCommitSha: params.linkedCommitSha,
+      linkedCommitSha,
       approvedById: params.approvedById,
     },
     update: {
       selectedPlanId: params.selectedPlanId,
       rationale: params.rationale,
-      linkedCommitSha: params.linkedCommitSha,
+      linkedCommitSha,
       approvedById: params.approvedById,
       approvedAt: new Date(),
     },

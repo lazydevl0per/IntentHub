@@ -329,11 +329,13 @@ export function CreateDecisionForm({
   plans,
   commits,
   demoMode,
+  hasExistingDecision,
 }: {
   objectiveId: string;
   plans: Array<{ id: string; title: string }>;
   commits: Array<{ sha: string; message: string }>;
   demoMode?: boolean;
+  hasExistingDecision?: boolean;
 }) {
   const router = useRouter();
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -363,7 +365,9 @@ export function CreateDecisionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <h4 className="font-medium">Record Decision</h4>
+      <h4 className="font-medium">
+        {hasExistingDecision ? "Revise Decision" : "Record Decision"}
+      </h4>
       <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
         <SelectTrigger>
           <SelectValue placeholder="Select winning plan" />

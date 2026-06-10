@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
-import { describe, it, mock } from "node:test";
+import { describe, it, afterEach } from "node:test";
+import { requireObjectiveAccess } from "../../src/lib/api";
 import { prisma } from "../../src/lib/prisma";
-import { GET } from "../../src/app/api/objectives/[id]/route";
 
-describe("API Objectives Integration", () => {
-  it("returns 404 for non-existent objective", async () => {
-    mock.method(prisma.objective, "findUnique", () => null);
-    
-    const request = new Request("http://localhost/api/objectives/non-existent");
-    const response = await GET(request, { params: Promise.resolve({ id: "non-existent" }) });
-    
-    assert.equal(response.status, 404);
+describe("objective access", () => {
+  const originalFindUnique = prisma.objective.findUnique.bind(prisma.objective);
+
+  afterEach(() => {
+    prisma.objective.findUnique = originalFindUnique;
+  });
+
+  it("returns null when objective does not exist", async () => {
+    prisma.objective.findUnique = async () => null as never;
+
+    const access = await requireObjectiveAccess("non-existent", "user-1");
+    assert.equal(access, null);
   });
 });

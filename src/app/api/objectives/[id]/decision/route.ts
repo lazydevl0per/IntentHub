@@ -50,5 +50,18 @@ export async function POST(
     approvedById: user.id,
   });
 
-  return NextResponse.json(decision, { status: 201 });
+  const { syncObjectiveDecisionCommit } = await import("@/lib/github");
+  await syncObjectiveDecisionCommit(id);
+
+  const updated = await prisma.decision.findUnique({
+    where: { objectiveId: id },
+    include: {
+      selectedPlan: true,
+      approvedBy: {
+        select: { id: true, name: true, email: true },
+      },
+    },
+  });
+
+  return NextResponse.json(updated ?? decision, { status: 201 });
 }

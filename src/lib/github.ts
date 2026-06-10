@@ -585,6 +585,7 @@ export async function syncPullRequests(repositoryId: string) {
           pullNumber: pull.number,
           mergeCommitSha: pull.merge_commit_sha,
           commitMessage: pull.title,
+          planId: agentRun?.planId,
         });
       }
     }
@@ -597,6 +598,7 @@ export async function recordMergedPullRequestOutcome(params: {
   pullNumber: number;
   mergeCommitSha: string;
   commitMessage?: string;
+  planId?: string | null;
 }) {
   await prisma.gitCommit.upsert({
     where: {
@@ -636,7 +638,9 @@ export async function recordMergedPullRequestOutcome(params: {
   });
 
   const { linkDecisionToCommit } = await import("@/lib/decision");
-  await linkDecisionToCommit(params.objectiveId, params.mergeCommitSha);
+  await linkDecisionToCommit(params.objectiveId, params.mergeCommitSha, {
+    planId: params.planId ?? undefined,
+  });
 
   try {
     const { enqueueIndexEntity } = await import("@/lib/jobs");
@@ -654,7 +658,88 @@ export async function recordMergedPullRequestOutcome(params: {
   }
 }
 
-export async function syncObjectiveDecisionCommit(objectiveId: string) {
+export async function resolveMergedCommitForPlan(
+  objectiveId: string,
+  planId: string
+) {
+  const objective = await prisma.objective.findUnique({
+    where: { id: objectiveId },
+    include: {
+      repository: {
+        include: {
+          members: {
+            where: { role: "OWNER" },
+            take: 1,
+          },
+        },
+      },
+      agentRuns: {
+        where: {
+          planId,
+          pullRequestNumber: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!objective) {
+    return null;
+  }
+
+  for (const run of objective.agentRuns) {
+    if (!run.pullRequestNumber) {
+      continue;
+    }
+
+    const deployment = await prisma.deployment.findFirst({
+      where: { id: `${objective.repositoryId}-${run.pullRequestNumber}` },
+    });
+
+    if (deployment?.commitSha) {
+      return deployment.commitSha;
+    }
+  }
+
+  const ownerMember = objective.repository.members[0];
+  if (!ownerMember) {
+    return null;
+  }
+
+  const token = await getUserGitHubToken(ownerMember.userId);
+  if (!token) {
+    return null;
+  }
+
+  const octokit = createOctokit(token);
+  const [owner, repo] = objective.repository.fullName.split("/");
+
+  for (const run of objective.agentRuns) {
+    if (!run.pullRequestNumber) {
+      continue;
+    }
+
+    try {
+      const { data: pull } = await octokit.pulls.get({
+        owner,
+        repo,
+        pull_number: run.pullRequestNumber,
+      });
+
+      if (pull.merged && pull.merge_commit_sha) {
+        return pull.merge_commit_sha;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function syncMergedCommitForSelectedPlan(objectiveId: string) {
+  const { commitsMatch, linkDecisionToCommit } = await import("@/lib/decision");
+
   const objective = await prisma.objective.findUnique({
     where: { id: objectiveId },
     include: {
@@ -674,90 +759,89 @@ export async function syncObjectiveDecisionCommit(objectiveId: string) {
     },
   });
 
-  if (!objective?.decision || objective.decision.linkedCommitSha) {
-    return objective?.decision?.linkedCommitSha ?? null;
+  if (!objective?.decision) {
+    return null;
   }
 
-  const linkedPull = await prisma.gitPullRequest.findFirst({
-    where: {
-      objectiveId,
-      state: PullRequestState.MERGED,
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  if (linkedPull) {
-    const deployment = await prisma.deployment.findFirst({
-      where: { id: `${objective.repositoryId}-${linkedPull.number}` },
-    });
-
-    if (deployment?.commitSha) {
-      await recordMergedPullRequestOutcome({
-        repositoryId: objective.repositoryId,
-        objectiveId,
-        pullNumber: linkedPull.number,
-        mergeCommitSha: deployment.commitSha,
-        commitMessage: linkedPull.title,
-      });
-      return deployment.commitSha;
-    }
-  }
+  const selectedPlanId = objective.decision.selectedPlanId;
+  const planRuns = objective.agentRuns.filter(
+    (run) => run.planId === selectedPlanId
+  );
 
   const ownerMember = objective.repository.members[0];
-  if (!ownerMember) {
-    return null;
-  }
+  const token = ownerMember
+    ? await getUserGitHubToken(ownerMember.userId)
+    : null;
 
-  const token = await getUserGitHubToken(ownerMember.userId);
-  if (!token) {
-    return null;
-  }
+  if (token) {
+    const octokit = createOctokit(token);
+    const [owner, repo] = objective.repository.fullName.split("/");
 
-  const octokit = createOctokit(token);
-  const [owner, repo] = objective.repository.fullName.split("/");
-
-  for (const run of objective.agentRuns) {
-    if (!run.pullRequestNumber) continue;
-
-    try {
-      const { data: pull } = await octokit.pulls.get({
-        owner,
-        repo,
-        pull_number: run.pullRequestNumber,
-      });
-
-      if (!pull.merged || !pull.merge_commit_sha) {
+    for (const run of planRuns) {
+      if (!run.pullRequestNumber) {
         continue;
       }
 
-      await prisma.gitPullRequest.updateMany({
-        where: {
+      try {
+        const { data: pull } = await octokit.pulls.get({
+          owner,
+          repo,
+          pull_number: run.pullRequestNumber,
+        });
+
+        if (!pull.merged || !pull.merge_commit_sha) {
+          continue;
+        }
+
+        await prisma.gitPullRequest.updateMany({
+          where: {
+            repositoryId: objective.repositoryId,
+            number: run.pullRequestNumber,
+          },
+          data: {
+            state: PullRequestState.MERGED,
+            mergedAt: pull.merged_at ? new Date(pull.merged_at) : new Date(),
+            objectiveId,
+            agentRunId: run.id,
+          },
+        });
+
+        await recordMergedPullRequestOutcome({
           repositoryId: objective.repositoryId,
-          number: run.pullRequestNumber,
-        },
-        data: {
-          state: PullRequestState.MERGED,
-          mergedAt: pull.merged_at ? new Date(pull.merged_at) : new Date(),
           objectiveId,
-          agentRunId: run.id,
-        },
-      });
+          pullNumber: run.pullRequestNumber,
+          mergeCommitSha: pull.merge_commit_sha,
+          commitMessage: pull.title,
+          planId: selectedPlanId,
+        });
 
-      await recordMergedPullRequestOutcome({
-        repositoryId: objective.repositoryId,
-        objectiveId,
-        pullNumber: run.pullRequestNumber,
-        mergeCommitSha: pull.merge_commit_sha,
-        commitMessage: pull.title,
-      });
-
-      return pull.merge_commit_sha;
-    } catch {
-      continue;
+        return pull.merge_commit_sha;
+      } catch {
+        continue;
+      }
     }
   }
 
-  return null;
+  const resolved = await resolveMergedCommitForPlan(objectiveId, selectedPlanId);
+  if (!resolved) {
+    return objective.decision.linkedCommitSha ?? null;
+  }
+
+  if (
+    !objective.decision.linkedCommitSha ||
+    !commitsMatch(objective.decision.linkedCommitSha, resolved)
+  ) {
+    await linkDecisionToCommit(objectiveId, resolved, {
+      planId: selectedPlanId,
+    });
+    return resolved;
+  }
+
+  return objective.decision.linkedCommitSha;
+}
+
+export async function syncObjectiveDecisionCommit(objectiveId: string) {
+  return syncMergedCommitForSelectedPlan(objectiveId);
 }
 
 export async function syncTags(repositoryId: string) {
@@ -889,6 +973,7 @@ export async function handlePullRequestWebhook(
         pullNumber: pull.number,
         mergeCommitSha: pull.merge_commit_sha,
         commitMessage: pull.title,
+        planId: agentRun?.planId,
       });
     }
   }

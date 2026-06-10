@@ -259,6 +259,7 @@ export default async function ObjectivePage({
               message: c.message,
             }))}
             demoMode={demoMode}
+            hasExistingDecision={Boolean(objective.decision)}
           />
         </TabsContent>
       </Tabs>
