@@ -349,7 +349,7 @@ enum PullRequestState {
 model GitPullRequest {
   id           String           @id @default(cuid())
   repositoryId String
-  githubId     Int
+  githubId     BigInt
   number       Int
   title        String
   state        PullRequestState

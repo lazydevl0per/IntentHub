@@ -1,0 +1,1 @@
+ALTER TABLE "GitPullRequest" ALTER COLUMN "githubId" SET DATA TYPE BIGINT;
