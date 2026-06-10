@@ -9,6 +9,7 @@ import {
   indexPlan,
 } from "@/lib/indexing";
 import { prisma } from "@/lib/prisma";
+import { isAiConfigured } from "@/lib/ai/provider";
 
 export type IndexEntityPayload =
   | { entity: "objective"; id: string }
@@ -74,7 +75,7 @@ export const syncRepositoryTask = task({
     for (const commit of commits) {
       try {
         await indexCommit(payload.repositoryId, commit.sha);
-        if (process.env.OPENAI_API_KEY) {
+        if (isAiConfigured()) {
           const { generateCommitInsight } = await import(
             "@/lib/ai/commit-insights"
           );
@@ -154,7 +155,7 @@ export const githubWebhookTask = task({
       for (const commit of payload.commits) {
         try {
           await indexCommit(payload.repositoryId, commit.id);
-          if (process.env.OPENAI_API_KEY) {
+          if (isAiConfigured()) {
             const { generateCommitInsight } = await import(
               "@/lib/ai/commit-insights"
             );

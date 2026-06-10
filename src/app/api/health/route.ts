@@ -1,3 +1,4 @@
+import { isAiConfigured } from "@/lib/ai/provider";
 import { isDemoMode } from "@/lib/demo";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
@@ -24,6 +25,8 @@ export async function GET(request: Request) {
             services: {
               trigger: Boolean(process.env.TRIGGER_SECRET_KEY),
               openai: Boolean(process.env.OPENAI_API_KEY),
+              google: Boolean(process.env.GOOGLE_AI_API_KEY),
+              aiConfigured: isAiConfigured(),
             },
           }
         : {}),
@@ -40,7 +43,9 @@ export async function GET(request: Request) {
         services: {
           trigger: Boolean(process.env.TRIGGER_SECRET_KEY),
           openai: Boolean(process.env.OPENAI_API_KEY),
+          google: Boolean(process.env.GOOGLE_AI_API_KEY),
           anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+          aiConfigured: isAiConfigured(),
           githubOAuth: Boolean(process.env.GITHUB_ID && process.env.GITHUB_SECRET),
         },
       });

@@ -30,6 +30,7 @@ import {
   handlePullRequestWebhook,
   handlePushWebhook,
 } from "@/lib/github";
+import { isAiConfigured } from "@/lib/ai/provider";
 
 function isTriggerConfigured() {
   return Boolean(process.env.TRIGGER_SECRET_KEY);
@@ -62,7 +63,7 @@ export async function enqueueIndexEntity(payload: IndexEntityPayload) {
 }
 
 async function runAnalyzeCommit(repositoryId: string, sha: string) {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!isAiConfigured()) {
     return;
   }
 
@@ -86,7 +87,7 @@ export async function enqueueGenerateObjectiveSummary(objectiveId: string) {
     );
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!isAiConfigured()) {
     return null;
   }
 
