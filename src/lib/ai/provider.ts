@@ -1,3 +1,4 @@
+import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 
 export type ChatMessage = {
@@ -5,18 +6,62 @@ export type ChatMessage = {
   content: string;
 };
 
-export type AiProvider = "openai" | "anthropic";
+export type AiProvider = "openai" | "anthropic" | "google";
 
 function getProvider(): AiProvider {
   const provider = process.env.AI_PROVIDER?.toLowerCase();
   if (provider === "anthropic") {
     return "anthropic";
   }
+  if (provider === "google") {
+    return "google";
+  }
   return "openai";
 }
 
+function useGoogleForEmbeddings() {
+  return (
+    getProvider() === "google" ||
+    (!process.env.OPENAI_API_KEY && Boolean(process.env.GOOGLE_AI_API_KEY))
+  );
+}
+
+function useGoogleForChat(chatModel: string) {
+  return getProvider() === "google" || chatModel.startsWith("gemini");
+}
+
+export function isAiConfigured() {
+  const provider = getProvider();
+  if (provider === "google") {
+    return Boolean(process.env.GOOGLE_AI_API_KEY);
+  }
+  if (provider === "anthropic") {
+    return (
+      Boolean(process.env.ANTHROPIC_API_KEY) &&
+      Boolean(process.env.OPENAI_API_KEY)
+    );
+  }
+  return Boolean(process.env.OPENAI_API_KEY);
+}
+
 function getChatModel() {
-  return process.env.AI_CHAT_MODEL ?? "gpt-4o-mini";
+  if (process.env.AI_CHAT_MODEL) {
+    return process.env.AI_CHAT_MODEL;
+  }
+  if (getProvider() === "google") {
+    return "gemini-2.0-flash";
+  }
+  return "gpt-4o-mini";
+}
+
+function getEmbeddingModel() {
+  if (process.env.AI_EMBEDDING_MODEL) {
+    return process.env.AI_EMBEDDING_MODEL;
+  }
+  if (useGoogleForEmbeddings()) {
+    return "gemini-embedding-001";
+  }
+  return "text-embedding-3-small";
 }
 
 function getOpenAI() {
@@ -27,8 +72,45 @@ function getOpenAI() {
   return new OpenAI({ apiKey });
 }
 
+function getGoogleAI() {
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GOOGLE_AI_API_KEY is not configured");
+  }
+  return new GoogleGenAI({ apiKey });
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toGoogleContents(messages: ChatMessage[]) {
+  return messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? ("model" as const) : ("user" as const),
+      parts: [{ text: m.content }],
+    }));
+}
+
+function getGoogleSystemInstruction(messages: ChatMessage[]) {
+  return messages.find((m) => m.role === "system")?.content;
+}
+
+async function googleCreateEmbedding(text: string) {
+  const client = getGoogleAI();
+  const response = await client.models.embedContent({
+    model: getEmbeddingModel(),
+    contents: text,
+    config: { outputDimensionality: 1536 },
+  });
+
+  const values = response.embeddings?.[0]?.values;
+  if (!values?.length) {
+    throw new Error("Google embedding API returned no values");
+  }
+
+  return values;
 }
 
 export async function createEmbedding(text: string, maxAttempts = 3) {
@@ -36,9 +118,13 @@ export async function createEmbedding(text: string, maxAttempts = 3) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      if (useGoogleForEmbeddings()) {
+        return await googleCreateEmbedding(text);
+      }
+
       const openai = getOpenAI();
       const response = await openai.embeddings.create({
-        model: "text-embedding-3-small",
+        model: getEmbeddingModel(),
         input: text,
       });
 
@@ -109,6 +195,32 @@ async function anthropicChatCompletionWithUsage(messages: ChatMessage[]) {
 async function anthropicChatCompletion(messages: ChatMessage[]) {
   const result = await anthropicChatCompletionWithUsage(messages);
   return result.content;
+}
+
+async function googleChatCompletionWithUsage(
+  messages: ChatMessage[],
+  model: string,
+  jsonMode = false
+): Promise<ChatCompletionResult> {
+  const client = getGoogleAI();
+  const systemInstruction = getGoogleSystemInstruction(messages);
+  const contents = toGoogleContents(messages);
+
+  const response = await client.models.generateContent({
+    model,
+    contents,
+    config: {
+      temperature: 0.2,
+      ...(systemInstruction ? { systemInstruction } : {}),
+      ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+    },
+  });
+
+  return {
+    content: response.text ?? "",
+    promptTokens: response.usageMetadata?.promptTokenCount,
+    completionTokens: response.usageMetadata?.candidatesTokenCount,
+  };
 }
 
 async function* anthropicStreamChatCompletion(messages: ChatMessage[]) {
@@ -189,11 +301,40 @@ async function* anthropicStreamChatCompletion(messages: ChatMessage[]) {
   }
 }
 
+async function* googleStreamChatCompletion(
+  messages: ChatMessage[],
+  model: string
+) {
+  const client = getGoogleAI();
+  const systemInstruction = getGoogleSystemInstruction(messages);
+  const contents = toGoogleContents(messages);
+
+  const stream = await client.models.generateContentStream({
+    model,
+    contents,
+    config: {
+      temperature: 0.2,
+      ...(systemInstruction ? { systemInstruction } : {}),
+    },
+  });
+
+  for await (const chunk of stream) {
+    if (chunk.text) {
+      yield chunk.text;
+    }
+  }
+}
+
 export async function chatCompletionWithUsage(
   messages: ChatMessage[],
   model?: string
 ): Promise<ChatCompletionResult> {
   const chatModel = model ?? getChatModel();
+
+  if (useGoogleForChat(chatModel)) {
+    return googleChatCompletionWithUsage(messages, chatModel);
+  }
+
   const useOpenAI =
     getProvider() === "openai" || chatModel.startsWith("gpt");
 
@@ -223,10 +364,17 @@ export async function chatCompletion(messages: ChatMessage[]) {
 export async function chatCompletionJson<T>(
   messages: ChatMessage[]
 ): Promise<T> {
-  if (getProvider() === "openai") {
+  const chatModel = getChatModel();
+
+  if (useGoogleForChat(chatModel)) {
+    const result = await googleChatCompletionWithUsage(messages, chatModel, true);
+    return JSON.parse(result.content || "{}") as T;
+  }
+
+  if (getProvider() === "openai" || chatModel.startsWith("gpt")) {
     const openai = getOpenAI();
     const response = await openai.chat.completions.create({
-      model: getChatModel(),
+      model: chatModel,
       messages,
       temperature: 0.2,
       response_format: { type: "json_object" },
@@ -249,6 +397,13 @@ export async function chatCompletionJson<T>(
 }
 
 export async function* streamChatCompletion(messages: ChatMessage[]) {
+  const chatModel = getChatModel();
+
+  if (useGoogleForChat(chatModel)) {
+    yield* googleStreamChatCompletion(messages, chatModel);
+    return;
+  }
+
   if (getProvider() === "anthropic") {
     yield* anthropicStreamChatCompletion(messages);
     return;
@@ -256,7 +411,7 @@ export async function* streamChatCompletion(messages: ChatMessage[]) {
 
   const openai = getOpenAI();
   const stream = await openai.chat.completions.create({
-    model: getChatModel(),
+    model: chatModel,
     messages,
     temperature: 0.2,
     stream: true,

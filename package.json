@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
+    "@google/genai": "^2.8.0",
     "@octokit/rest": "^22.0.1",
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-avatar": "^1.1.12",
