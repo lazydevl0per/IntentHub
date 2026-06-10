@@ -1,6 +1,65 @@
 import { enqueueGenerateObjectiveSummary, enqueueIndexEntity } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 
+export function commitsMatch(linkedSha: string, commitSha: string) {
+  return (
+    commitSha === linkedSha ||
+    commitSha.startsWith(linkedSha) ||
+    linkedSha.startsWith(commitSha)
+  );
+}
+
+export async function linkDecisionToCommit(
+  objectiveId: string,
+  commitSha: string
+) {
+  const decision = await prisma.decision.findUnique({
+    where: { objectiveId },
+  });
+
+  if (!decision || decision.linkedCommitSha) {
+    return decision;
+  }
+
+  const updated = await prisma.decision.update({
+    where: { objectiveId },
+    data: { linkedCommitSha: commitSha },
+  });
+
+  try {
+    await enqueueIndexEntity({
+      entity: "decision",
+      objectiveId,
+    });
+  } catch (error) {
+    console.error("[index] decision indexing enqueue failed", {
+      objectiveId,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+
+  return updated;
+}
+
+export async function resolveLinkedCommitForObjective(objectiveId: string) {
+  const decision = await prisma.decision.findUnique({
+    where: { objectiveId },
+    select: { linkedCommitSha: true },
+  });
+
+  if (decision?.linkedCommitSha) {
+    return decision.linkedCommitSha;
+  }
+
+  const deployment = await prisma.deployment.findFirst({
+    where: { objectiveId },
+    orderBy: { deployedAt: "desc" },
+    select: { commitSha: true },
+  });
+
+  return deployment?.commitSha ?? null;
+}
+
 export async function recordDecision(params: {
   objectiveId: string;
   selectedPlanId: string;

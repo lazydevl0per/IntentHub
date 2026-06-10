@@ -4,8 +4,10 @@ import {
   requireObjectiveAccess,
   unauthorized,
 } from "@/lib/api";
+import { commitsMatch } from "@/lib/decision";
 import { getDemoGraphData } from "@/lib/demo/fixtures";
 import { isDemoMode } from "@/lib/demo";
+import { syncObjectiveDecisionCommit } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -25,6 +27,8 @@ export async function GET(
     if (!graph) return notFound();
     return NextResponse.json(graph);
   }
+
+  await syncObjectiveDecisionCommit(id);
 
   const objective = await prisma.objective.findUnique({
     where: { id },
@@ -49,6 +53,30 @@ export async function GET(
   });
 
   if (!objective) return notFound();
+
+  let linkedCommit =
+    objective.decision?.linkedCommitSha
+      ? await prisma.gitCommit.findFirst({
+          where: {
+            repositoryId: objective.repositoryId,
+            OR: [
+              { sha: objective.decision.linkedCommitSha },
+              { sha: { startsWith: objective.decision.linkedCommitSha } },
+            ],
+          },
+        })
+      : null;
+
+  if (
+    !linkedCommit &&
+    objective.decision?.linkedCommitSha &&
+    objective.repository.commits.length > 0
+  ) {
+    linkedCommit =
+      objective.repository.commits.find((commit) =>
+        commitsMatch(objective.decision!.linkedCommitSha!, commit.sha)
+      ) ?? null;
+  }
 
   const nodes: Array<{
     id: string;
@@ -138,42 +166,36 @@ export async function GET(
       target: `decision-${objective.decision.id}`,
     });
 
-    if (objective.decision.linkedCommitSha) {
-      const commit = objective.repository.commits.find(
-        (c) => c.sha.startsWith(objective.decision!.linkedCommitSha!)
+    if (objective.decision.linkedCommitSha && linkedCommit) {
+      nodes.push({
+        id: `commit-${linkedCommit.id}`,
+        type: "commit",
+        label: linkedCommit.sha.slice(0, 7),
+        href: `/repositories/${objective.repositoryId}`,
+        data: { message: linkedCommit.message },
+      });
+      edges.push({
+        id: `edge-decision-commit-${linkedCommit.id}`,
+        source: `decision-${objective.decision.id}`,
+        target: `commit-${linkedCommit.id}`,
+      });
+
+      const deployment = objective.deployments.find((item) =>
+        item.commitSha.startsWith(linkedCommit.sha.slice(0, 7))
       );
 
-      if (commit) {
+      if (deployment) {
         nodes.push({
-          id: `commit-${commit.id}`,
-          type: "commit",
-          label: commit.sha.slice(0, 7),
-          href: `/repositories/${objective.repositoryId}`,
-          data: { message: commit.message },
+          id: `deployment-${deployment.id}`,
+          type: "deployment",
+          label: deployment.environment,
+          data: { commitSha: deployment.commitSha },
         });
         edges.push({
-          id: `edge-decision-commit-${commit.id}`,
-          source: `decision-${objective.decision.id}`,
-          target: `commit-${commit.id}`,
+          id: `edge-commit-deployment-${deployment.id}`,
+          source: `commit-${linkedCommit.id}`,
+          target: `deployment-${deployment.id}`,
         });
-
-        const deployment = objective.deployments.find((item) =>
-          item.commitSha.startsWith(commit.sha.slice(0, 7))
-        );
-
-        if (deployment) {
-          nodes.push({
-            id: `deployment-${deployment.id}`,
-            type: "deployment",
-            label: deployment.environment,
-            data: { commitSha: deployment.commitSha },
-          });
-          edges.push({
-            id: `edge-commit-deployment-${deployment.id}`,
-            source: `commit-${commit.id}`,
-            target: `deployment-${deployment.id}`,
-          });
-        }
       }
     }
   }

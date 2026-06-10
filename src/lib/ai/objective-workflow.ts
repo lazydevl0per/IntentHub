@@ -6,7 +6,11 @@ import { recommendDecision } from "@/lib/ai/decision-recommender";
 import { generateAgentRunEvaluation } from "@/lib/ai/evaluation-generator";
 import { generatePlansForObjective } from "@/lib/ai/plan-generator";
 import { selectBestPlan } from "@/lib/ai/plan-selector";
-import { recordDecision } from "@/lib/decision";
+import {
+  recordDecision,
+  resolveLinkedCommitForObjective,
+} from "@/lib/decision";
+import { syncObjectiveDecisionCommit } from "@/lib/github";
 import { enqueueExecuteAgentRun, enqueueIndexEntity } from "@/lib/jobs";
 import { prisma } from "@/lib/prisma";
 import { WorkflowStatus } from "@prisma/client";
@@ -365,11 +369,18 @@ export async function approveWorkflowDecision(params: {
     throw new Error("Missing decision recommendation");
   }
 
+  let linkedCommitSha = params.linkedCommitSha;
+  if (!linkedCommitSha) {
+    await syncObjectiveDecisionCommit(workflow.objectiveId);
+    linkedCommitSha =
+      (await resolveLinkedCommitForObjective(workflow.objectiveId)) ?? undefined;
+  }
+
   const decision = await recordDecision({
     objectiveId: workflow.objectiveId,
     selectedPlanId,
     rationale,
-    linkedCommitSha: params.linkedCommitSha,
+    linkedCommitSha,
     approvedById: params.userId,
   });
 

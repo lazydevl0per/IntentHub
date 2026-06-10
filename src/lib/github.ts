@@ -567,25 +567,197 @@ export async function syncPullRequests(repositoryId: string) {
     });
 
     if (pull.merged_at && pull.merge_commit_sha) {
-      await prisma.deployment.upsert({
+      const existingPr = await prisma.gitPullRequest.findUnique({
         where: {
-          id: `${repositoryId}-${pull.number}`,
+          repositoryId_number: {
+            repositoryId,
+            number: pull.number,
+          },
         },
-        create: {
-          id: `${repositoryId}-${pull.number}`,
-          repositoryId,
-          environment: "production",
-          commitSha: pull.merge_commit_sha,
-          objectiveId: agentRun?.objectiveId,
-        },
-        update: {
-          commitSha: pull.merge_commit_sha,
-          deployedAt: new Date(),
-          objectiveId: agentRun?.objectiveId,
-        },
+        select: { objectiveId: true },
       });
+      const objectiveId = agentRun?.objectiveId ?? existingPr?.objectiveId;
+
+      if (objectiveId) {
+        await recordMergedPullRequestOutcome({
+          repositoryId,
+          objectiveId,
+          pullNumber: pull.number,
+          mergeCommitSha: pull.merge_commit_sha,
+          commitMessage: pull.title,
+        });
+      }
     }
   }
+}
+
+export async function recordMergedPullRequestOutcome(params: {
+  repositoryId: string;
+  objectiveId: string;
+  pullNumber: number;
+  mergeCommitSha: string;
+  commitMessage?: string;
+}) {
+  await prisma.gitCommit.upsert({
+    where: {
+      repositoryId_sha: {
+        repositoryId: params.repositoryId,
+        sha: params.mergeCommitSha,
+      },
+    },
+    create: {
+      repositoryId: params.repositoryId,
+      sha: params.mergeCommitSha,
+      message:
+        params.commitMessage ?? `Merged pull request #${params.pullNumber}`,
+      author: "GitHub",
+      committedAt: new Date(),
+      parentShas: [],
+    },
+    update: {
+      message: params.commitMessage ?? undefined,
+    },
+  });
+
+  await prisma.deployment.upsert({
+    where: { id: `${params.repositoryId}-${params.pullNumber}` },
+    create: {
+      id: `${params.repositoryId}-${params.pullNumber}`,
+      repositoryId: params.repositoryId,
+      environment: "production",
+      commitSha: params.mergeCommitSha,
+      objectiveId: params.objectiveId,
+    },
+    update: {
+      commitSha: params.mergeCommitSha,
+      deployedAt: new Date(),
+      objectiveId: params.objectiveId,
+    },
+  });
+
+  const { linkDecisionToCommit } = await import("@/lib/decision");
+  await linkDecisionToCommit(params.objectiveId, params.mergeCommitSha);
+
+  try {
+    const { enqueueIndexEntity } = await import("@/lib/jobs");
+    await enqueueIndexEntity({
+      entity: "commit",
+      repositoryId: params.repositoryId,
+      sha: params.mergeCommitSha,
+    });
+  } catch (error) {
+    console.error("[index] merge commit indexing enqueue failed", {
+      repositoryId: params.repositoryId,
+      sha: params.mergeCommitSha,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+}
+
+export async function syncObjectiveDecisionCommit(objectiveId: string) {
+  const objective = await prisma.objective.findUnique({
+    where: { id: objectiveId },
+    include: {
+      decision: true,
+      repository: {
+        include: {
+          members: {
+            where: { role: "OWNER" },
+            take: 1,
+          },
+        },
+      },
+      agentRuns: {
+        where: { pullRequestNumber: { not: null } },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!objective?.decision || objective.decision.linkedCommitSha) {
+    return objective?.decision?.linkedCommitSha ?? null;
+  }
+
+  const linkedPull = await prisma.gitPullRequest.findFirst({
+    where: {
+      objectiveId,
+      state: PullRequestState.MERGED,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (linkedPull) {
+    const deployment = await prisma.deployment.findFirst({
+      where: { id: `${objective.repositoryId}-${linkedPull.number}` },
+    });
+
+    if (deployment?.commitSha) {
+      await recordMergedPullRequestOutcome({
+        repositoryId: objective.repositoryId,
+        objectiveId,
+        pullNumber: linkedPull.number,
+        mergeCommitSha: deployment.commitSha,
+        commitMessage: linkedPull.title,
+      });
+      return deployment.commitSha;
+    }
+  }
+
+  const ownerMember = objective.repository.members[0];
+  if (!ownerMember) {
+    return null;
+  }
+
+  const token = await getUserGitHubToken(ownerMember.userId);
+  if (!token) {
+    return null;
+  }
+
+  const octokit = createOctokit(token);
+  const [owner, repo] = objective.repository.fullName.split("/");
+
+  for (const run of objective.agentRuns) {
+    if (!run.pullRequestNumber) continue;
+
+    try {
+      const { data: pull } = await octokit.pulls.get({
+        owner,
+        repo,
+        pull_number: run.pullRequestNumber,
+      });
+
+      if (!pull.merged || !pull.merge_commit_sha) {
+        continue;
+      }
+
+      await prisma.gitPullRequest.updateMany({
+        where: {
+          repositoryId: objective.repositoryId,
+          number: run.pullRequestNumber,
+        },
+        data: {
+          state: PullRequestState.MERGED,
+          mergedAt: pull.merged_at ? new Date(pull.merged_at) : new Date(),
+          objectiveId,
+          agentRunId: run.id,
+        },
+      });
+
+      await recordMergedPullRequestOutcome({
+        repositoryId: objective.repositoryId,
+        objectiveId,
+        pullNumber: run.pullRequestNumber,
+        mergeCommitSha: pull.merge_commit_sha,
+        commitMessage: pull.title,
+      });
+
+      return pull.merge_commit_sha;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 export async function syncTags(repositoryId: string) {
@@ -699,21 +871,26 @@ export async function handlePullRequestWebhook(
   });
 
   if (pull.merged_at && pull.merge_commit_sha) {
-    await prisma.deployment.upsert({
-      where: { id: `${repositoryId}-${pull.number}` },
-      create: {
-        id: `${repositoryId}-${pull.number}`,
-        repositoryId,
-        environment: "production",
-        commitSha: pull.merge_commit_sha,
-        objectiveId: agentRun?.objectiveId,
+    const savedPr = await prisma.gitPullRequest.findUnique({
+      where: {
+        repositoryId_number: {
+          repositoryId,
+          number: pull.number,
+        },
       },
-      update: {
-        commitSha: pull.merge_commit_sha,
-        deployedAt: new Date(),
-        objectiveId: agentRun?.objectiveId,
-      },
+      select: { objectiveId: true },
     });
+    const objectiveId = agentRun?.objectiveId ?? savedPr?.objectiveId;
+
+    if (objectiveId) {
+      await recordMergedPullRequestOutcome({
+        repositoryId,
+        objectiveId,
+        pullNumber: pull.number,
+        mergeCommitSha: pull.merge_commit_sha,
+        commitMessage: pull.title,
+      });
+    }
   }
 }
 
