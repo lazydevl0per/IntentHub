@@ -15,9 +15,11 @@ const baseSchema = z.object({
   TRIGGER_SECRET_KEY: z.string().optional(),
   TRIGGER_PROJECT_REF: z.string().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
-  AI_PROVIDER: z.enum(["openai", "anthropic"]).optional(),
+  AI_PROVIDER: z.enum(["openai", "anthropic", "google"]).optional(),
   AI_CHAT_MODEL: z.string().optional(),
+  AI_EMBEDDING_MODEL: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+  GOOGLE_AI_API_KEY: z.string().optional(),
   GITHUB_SYNC_COMMIT_LIMIT: z.string().optional(),
   GITHUB_SYNC_BRANCH_LIMIT: z.string().optional(),
   UPSTASH_REDIS_REST_URL: z.string().optional(),
@@ -44,7 +46,9 @@ function parseEnv() {
     GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET,
     AI_PROVIDER: process.env.AI_PROVIDER,
     AI_CHAT_MODEL: process.env.AI_CHAT_MODEL,
+    AI_EMBEDDING_MODEL: process.env.AI_EMBEDDING_MODEL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    GOOGLE_AI_API_KEY: process.env.GOOGLE_AI_API_KEY,
     GITHUB_SYNC_COMMIT_LIMIT: process.env.GITHUB_SYNC_COMMIT_LIMIT,
     GITHUB_SYNC_BRANCH_LIMIT: process.env.GITHUB_SYNC_BRANCH_LIMIT,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
@@ -81,7 +85,17 @@ export function validateProductionEnv() {
     if (!env.NEXT_PUBLIC_APP_URL) {
       errors.push("NEXT_PUBLIC_APP_URL is required");
     }
-    if (!env.OPENAI_API_KEY) errors.push("OPENAI_API_KEY is required");
+    const aiProvider = env.AI_PROVIDER ?? "openai";
+    if (aiProvider === "google") {
+      if (!env.GOOGLE_AI_API_KEY) {
+        errors.push("GOOGLE_AI_API_KEY is required when AI_PROVIDER=google");
+      }
+    } else if (!env.OPENAI_API_KEY) {
+      errors.push("OPENAI_API_KEY is required (or set AI_PROVIDER=google with GOOGLE_AI_API_KEY)");
+    }
+    if (aiProvider === "anthropic" && !env.ANTHROPIC_API_KEY) {
+      errors.push("ANTHROPIC_API_KEY is required when AI_PROVIDER=anthropic");
+    }
     if (!env.GITHUB_ID || !env.GITHUB_SECRET) {
       errors.push("GITHUB_ID and GITHUB_SECRET are required");
     }
