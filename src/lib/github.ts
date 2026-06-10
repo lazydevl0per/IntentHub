@@ -199,7 +199,11 @@ export async function syncRepository(repositoryId: string) {
     }
   }
 
-  for (const branch of branches.slice(0, branchLimit)) {
+  const syncedBranches = branches.slice(0, branchLimit);
+  const syncedBranchNames = syncedBranches.map((branch) => branch.name);
+  const fetchedAllBranches = branches.length < branchLimit;
+
+  for (const branch of syncedBranches) {
     await prisma.gitBranch.upsert({
       where: {
         repositoryId_name: {
@@ -214,6 +218,15 @@ export async function syncRepository(repositoryId: string) {
       },
       update: {
         headSha: branch.commit.sha,
+      },
+    });
+  }
+
+  if (fetchedAllBranches) {
+    await prisma.gitBranch.deleteMany({
+      where: {
+        repositoryId,
+        name: { notIn: syncedBranchNames },
       },
     });
   }
