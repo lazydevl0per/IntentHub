@@ -75,3 +75,13 @@ export const connectRepoSchema = z.object({
 export const repositorySettingsSchema = z.object({
   agentSystemPrompt: z.string().max(8000).nullable().optional(),
 });
+
+export const startWorkflowSchema = z.object({
+  model: z.string().min(1).max(100),
+});
+
+export const approveWorkflowDecisionSchema = z.object({
+  selectedPlanId: z.string().min(1).optional(),
+  rationale: z.string().min(1).optional(),
+  linkedCommitSha: z.string().optional(),
+});
