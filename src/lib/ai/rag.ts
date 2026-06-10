@@ -1,5 +1,10 @@
 import crypto from "crypto";
-import { fetchRecentRepositoryActivity, isRecencyQuery } from "@/lib/ai/recent-activity";
+import {
+  detectChatIntents,
+  fetchIntentContextBlocks,
+} from "@/lib/ai/chat-intent";
+import { expandRetrievalQuery } from "@/lib/ai/chat-query";
+import { enrichCitationsWithHref } from "@/lib/citation-links";
 import { prisma } from "@/lib/prisma";
 import { createEmbedding, streamChatCompletion, type ChatMessage } from "@/lib/ai/provider";
 import { fullTextSearch } from "@/lib/search";
@@ -9,6 +14,7 @@ export type RagCitation = {
   entityType: string;
   entityId: string;
   title: string;
+  href?: string | null;
 };
 
 function chunkText(text: string, maxLength = 1000) {
@@ -71,7 +77,7 @@ export async function indexEntityContent(params: {
 export async function vectorSearch(
   repositoryId: string,
   query: string,
-  limit = 8
+  limit = 12
 ) {
   const embedding = await createEmbedding(query);
   const vectorLiteral = `[${embedding.join(",")}]`;
@@ -186,66 +192,96 @@ async function enrichCitations(citations: Map<string, RagCitation>) {
   return new Map(resolved);
 }
 
+function addCitation(
+  citations: Map<string, RagCitation>,
+  entityType: string,
+  entityId: string,
+  title?: string
+) {
+  citations.set(citationKey(entityType, entityId), {
+    entityType,
+    entityId,
+    title: title ?? entityTypeLabels[entityType] ?? entityType,
+  });
+}
+
 export async function buildRagContextWithCitations(
   repositoryId: string,
-  query: string
+  query: string,
+  history?: Array<{ role: "user" | "assistant"; content: string }>
 ) {
-  const recencyQuery = isRecencyQuery(query);
+  const retrievalQuery = expandRetrievalQuery(query, history);
+  const intents = detectChatIntents(query);
 
-  const [vectorResults, ftsResults, recentActivity] = await Promise.all([
-    vectorSearch(repositoryId, query),
-    fullTextSearch(repositoryId, query, recencyQuery ? 3 : 5),
-    recencyQuery
-      ? fetchRecentRepositoryActivity(repositoryId)
-      : Promise.resolve(null),
+  const [vectorResults, ftsResults, intentBlocks] = await Promise.all([
+    vectorSearch(repositoryId, retrievalQuery),
+    fullTextSearch(repositoryId, retrievalQuery, intents.length > 0 ? 3 : 5),
+    fetchIntentContextBlocks(repositoryId, intents),
   ]);
 
   const contextParts: string[] = [];
   const citations = new Map<string, RagCitation>();
+  const seenEntities = new Set<string>();
 
-  if (recentActivity) {
-    contextParts.push(`[RECENT ACTIVITY]\n${recentActivity.text}`);
-    for (const citation of recentActivity.citations) {
-      citations.set(citationKey(citation.entityType, citation.entityId), {
-        entityType: citation.entityType,
-        entityId: citation.entityId,
-        title: citation.title,
-      });
+  for (const block of intentBlocks) {
+    contextParts.push(`[${block.label}]\n${block.text}`);
+    for (const citation of block.citations) {
+      addCitation(
+        citations,
+        citation.entityType,
+        citation.entityId,
+        citation.title
+      );
     }
   }
 
   for (const result of vectorResults) {
+    const key = citationKey(result.entityType, result.entityId);
+    if (seenEntities.has(key)) continue;
+    seenEntities.add(key);
     contextParts.push(
       `[${result.entityType}:${result.entityId}] ${result.content}`
     );
-    citations.set(citationKey(result.entityType, result.entityId), {
-      entityType: result.entityType,
-      entityId: result.entityId,
-      title: entityTypeLabels[result.entityType] ?? result.entityType,
-    });
+    addCitation(citations, result.entityType, result.entityId);
+    if (seenEntities.size >= 8) break;
   }
 
   for (const result of ftsResults) {
+    const key = citationKey(result.entity_type, result.entity_id);
+    if (seenEntities.has(key)) continue;
+    seenEntities.add(key);
     contextParts.push(
       `[${result.entity_type}:${result.entity_id}] ${result.title}: ${result.content}`
     );
-    citations.set(citationKey(result.entity_type, result.entity_id), {
-      entityType: result.entity_type,
-      entityId: result.entity_id,
-      title: result.title,
-    });
+    addCitation(
+      citations,
+      result.entity_type,
+      result.entity_id,
+      result.title
+    );
   }
 
   const enriched = await enrichCitations(citations);
+  const withHref = await enrichCitationsWithHref(
+    Array.from(enriched.values())
+  );
 
   return {
     context: contextParts.join("\n\n"),
-    citations: Array.from(enriched.values()),
+    citations: withHref,
   };
 }
 
-export async function buildRagContext(repositoryId: string, query: string) {
-  const { context } = await buildRagContextWithCitations(repositoryId, query);
+export async function buildRagContext(
+  repositoryId: string,
+  query: string,
+  history?: Array<{ role: "user" | "assistant"; content: string }>
+) {
+  const { context } = await buildRagContextWithCitations(
+    repositoryId,
+    query,
+    history
+  );
   return context;
 }
 
@@ -276,7 +312,8 @@ export function streamRepositoryChatWithCitations(params: {
   async function* generator() {
     const { context, citations } = await buildRagContextWithCitations(
       params.repositoryId,
-      params.message
+      params.message,
+      params.history
     );
 
     resolveCitations(citations);
@@ -285,7 +322,9 @@ export function streamRepositoryChatWithCitations(params: {
       {
         role: "system",
         content: `You are IntentHub, an AI assistant that answers questions about a software repository's objectives, plans, decisions, and implementation history. Use only the provided context. If the context is insufficient, say so clearly.
-When the context includes a RECENT ACTIVITY section, treat it as the authoritative timeline for questions about recent, latest, or new changes. Do not infer recency from semantic search results alone.
+When the context includes structured sections (RECENT ACTIVITY, REJECTED PLANS, DECISIONS, ACTIVE OBJECTIVES, REPOSITORY SNAPSHOT), prefer those sections over generic search results for matching questions.
+For recent or latest changes, use RECENT ACTIVITY. For rejected alternatives, use REJECTED PLANS. For why something was chosen, use DECISIONS. For open work, use ACTIVE OBJECTIVES.
+Reference entity tags like [OBJECTIVE:id] when citing specific items.
 
 Context:
 ${context || "No repository knowledge found yet."}`,

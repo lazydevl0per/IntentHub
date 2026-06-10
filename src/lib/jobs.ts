@@ -150,6 +150,7 @@ export async function enqueueSyncRepository(
   for (const commit of commits) {
     try {
       await indexCommit(repositoryId, commit.sha);
+      await runAnalyzeCommit(repositoryId, commit.sha);
     } catch (error) {
       console.error("[index] commit indexing failed", {
         repositoryId,

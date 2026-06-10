@@ -354,6 +354,7 @@ model ChatMessage {
   sessionId String
   role      String
   content   String   @db.Text
+  citations Json?
   createdAt DateTime @default(now())
 
   session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

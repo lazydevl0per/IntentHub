@@ -170,7 +170,14 @@ export default async function RepositoryPage({
         </div>
 
         <div>
-          <RepoChat repositoryId={repository.id} demoMode={demoMode} />
+          <RepoChat
+            repositoryId={repository.id}
+            demoMode={demoMode}
+            lastSyncedAt={repository.lastSyncedAt?.toISOString() ?? null}
+            objectives={repository.objectives.map((objective) => ({
+              status: objective.status,
+            }))}
+          />
         </div>
       </div>
     </div>

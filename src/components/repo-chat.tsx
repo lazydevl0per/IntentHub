@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DemoReadonlyNotice } from "@/components/demo-readonly";
 
+type Citation = {
+  entityType: string;
+  entityId: string;
+  title: string;
+  href?: string | null;
+};
+
 type Message = {
   role: "user" | "assistant";
   content: string;
-  citations?: Array<{ entityType: string; entityId: string; title: string }>;
+  citations?: Citation[];
 };
 
 type ChatSession = {
@@ -20,19 +28,12 @@ type ChatSession = {
   _count: { messages: number };
 };
 
-const suggestions = [
-  "What changed recently?",
-  "Why was this architecture chosen?",
-  "What alternatives were rejected?",
-  "Which objectives are still active?",
-];
-
 function parseAssistantStream(raw: string) {
   const marker = "\n\n[[CITATIONS]]";
   const endMarker = "[[/CITATIONS]]";
   const start = raw.indexOf(marker);
   if (start === -1) {
-    return { content: raw, citations: [] as Message["citations"] };
+    return { content: raw, citations: [] as Citation[] };
   }
 
   const end = raw.indexOf(endMarker, start);
@@ -44,19 +45,53 @@ function parseAssistantStream(raw: string) {
   try {
     const citations = JSON.parse(
       raw.slice(start + marker.length, end)
-    ) as Message["citations"];
+    ) as Citation[];
     return { content, citations: citations ?? [] };
   } catch {
     return { content, citations: [] };
   }
 }
 
+function isKnowledgeStale(lastSyncedAt: string | null | undefined) {
+  if (!lastSyncedAt) return true;
+  const synced = new Date(lastSyncedAt).getTime();
+  if (Number.isNaN(synced)) return true;
+  return Date.now() - synced > 24 * 60 * 60 * 1000;
+}
+
+function buildSuggestions(
+  objectives: Array<{ status: string }>
+) {
+  const suggestions = ["What changed recently?"];
+
+  if (objectives.some((objective) => objective.status === "COMPLETED")) {
+    suggestions.push("Why was this architecture chosen?");
+  }
+  if (objectives.length > 0) {
+    suggestions.push("What alternatives were rejected?");
+  }
+  if (
+    objectives.some(
+      (objective) =>
+        objective.status === "ACTIVE" || objective.status === "DRAFT"
+    )
+  ) {
+    suggestions.push("Which objectives are still active?");
+  }
+
+  return suggestions.slice(0, 4);
+}
+
 export function RepoChat({
   repositoryId,
   demoMode,
+  lastSyncedAt,
+  objectives = [],
 }: {
   repositoryId: string;
   demoMode?: boolean;
+  lastSyncedAt?: string | null;
+  objectives?: Array<{ status: string }>;
 }) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -64,6 +99,12 @@ export function RepoChat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [chatError, setChatError] = useState("");
+
+  const suggestions = useMemo(
+    () => buildSuggestions(objectives),
+    [objectives]
+  );
+  const knowledgeStale = isKnowledgeStale(lastSyncedAt);
 
   async function loadSession(id: string) {
     const res = await fetch(
@@ -74,10 +115,17 @@ export function RepoChat({
     const data = await res.json();
     setSessionId(data.id);
     setMessages(
-      data.messages.map((m: { role: string; content: string }) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }))
+      data.messages.map(
+        (m: {
+          role: string;
+          content: string;
+          citations?: Citation[] | null;
+        }) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          citations: (m.citations as Citation[] | null) ?? undefined,
+        })
+      )
     );
   }
 
@@ -190,6 +238,18 @@ export function RepoChat({
           </Button>
         </div>
         {demoMode && <DemoReadonlyNotice />}
+        {knowledgeStale && !demoMode && (
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Knowledge may be stale.{" "}
+            <Link
+              href={`/repositories/${repositoryId}/settings`}
+              className="underline"
+            >
+              Sync or reindex
+            </Link>{" "}
+            for better answers.
+          </p>
+        )}
         {chatError && <p className="text-sm text-red-600">{chatError}</p>}
         {sessions.length > 0 && (
           <ScrollArea className="h-20">
@@ -249,14 +309,24 @@ export function RepoChat({
                       Sources
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {message.citations.map((citation) => (
-                        <span
-                          key={`${citation.entityType}-${citation.entityId}`}
-                          className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800"
-                        >
-                          {citation.entityType}: {citation.title}
-                        </span>
-                      ))}
+                      {message.citations.map((citation) =>
+                        citation.href ? (
+                          <Link
+                            key={`${citation.entityType}-${citation.entityId}`}
+                            href={citation.href}
+                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs underline dark:bg-zinc-800"
+                          >
+                            {citation.title}
+                          </Link>
+                        ) : (
+                          <span
+                            key={`${citation.entityType}-${citation.entityId}`}
+                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800"
+                          >
+                            {citation.title}
+                          </span>
+                        )
+                      )}
                     </div>
                   </div>
                 )}

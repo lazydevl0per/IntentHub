@@ -137,6 +137,7 @@ export async function POST(
             sessionId: sessionIdHeader,
             role: "assistant",
             content: assistantContent,
+            citations: citationList,
           },
         });
 

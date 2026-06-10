@@ -1,16 +1,33 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isRecencyQuery } from "../../src/lib/ai/recent-activity";
+import {
+  detectChatIntents,
+  isRecencyQuery,
+} from "../../src/lib/ai/chat-intent";
 
-describe("isRecencyQuery", () => {
+describe("chat intent detection", () => {
   it("detects recent change questions", () => {
     assert.equal(isRecencyQuery("What was changed recently?"), true);
-    assert.equal(isRecencyQuery("What changed lately?"), true);
-    assert.equal(isRecencyQuery("Show latest updates"), true);
+    assert.deepEqual(detectChatIntents("What changed lately?"), ["recency"]);
+  });
+
+  it("detects rejected and decision questions", () => {
+    assert.deepEqual(detectChatIntents("What alternatives were rejected?"), [
+      "rejected",
+    ]);
+    assert.deepEqual(
+      detectChatIntents("Why was this architecture chosen?"),
+      ["decision"]
+    );
+  });
+
+  it("detects active objective questions", () => {
+    assert.deepEqual(detectChatIntents("Which objectives are still active?"), [
+      "active",
+    ]);
   });
 
   it("ignores unrelated questions", () => {
-    assert.equal(isRecencyQuery("Why was Redis chosen?"), false);
-    assert.equal(isRecencyQuery("What alternatives were rejected?"), false);
+    assert.deepEqual(detectChatIntents("How does pagination work?"), []);
   });
 });
