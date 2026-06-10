@@ -32,7 +32,8 @@ export function RunAgentForm({
 }) {
   const router = useRouter();
   const [planId, setPlanId] = useState("");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [model, setModel] = useState("");
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -40,6 +41,13 @@ export function RunAgentForm({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    fetch("/api/models")
+      .then((res) => res.json())
+      .then((data) => {
+        setAvailableModels(data);
+        if (data.length > 0) setModel(data[0]);
+      });
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
@@ -72,7 +80,7 @@ export function RunAgentForm({
   }
 
   async function handleRun() {
-    if (!planId) return;
+    if (!planId || !model) return;
 
     setLoading(true);
     setError("");
@@ -130,18 +138,21 @@ export function RunAgentForm({
       </Select>
       <Select value={model} onValueChange={setModel}>
         <SelectTrigger>
-          <SelectValue />
+          <SelectValue placeholder="Select model" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
-          <SelectItem value="gpt-4o">gpt-4o</SelectItem>
+          {availableModels.map((m) => (
+            <SelectItem key={m} value={m}>
+              {m}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <Button
         type="button"
         size="sm"
         onClick={handleRun}
-        disabled={loading || !planId}
+        disabled={loading || !planId || !model}
       >
         {loading ? "Running..." : "Run Agent"}
       </Button>
@@ -149,60 +160,36 @@ export function RunAgentForm({
   );
 }
 
-export function RunAgentButton({
-  objectiveId,
-  planId,
-  demoMode,
-}: {
-  objectiveId: string;
-  planId: string;
-  demoMode?: boolean;
-}) {
+export function RunAgentButton({ objectiveId, planId, demoMode }: { objectiveId: string; planId: string; demoMode?: boolean }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function handleRun() {
     setLoading(true);
-
     const res = await fetch(`/api/objectives/${objectiveId}/agent-runs/execute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ planId, model: "gpt-4o-mini" }),
     });
-
     if (res.ok) {
       const data = await res.json();
       const agentRunId = data.id as string;
       const deadline = Date.now() + 120_000;
-
       while (Date.now() < deadline) {
         const statusRes = await fetch(`/api/agent-runs/${agentRunId}`);
         if (statusRes.ok) {
           const statusData = await statusRes.json();
-          if (
-            statusData.status === "COMPLETED" ||
-            statusData.status === "FAILED"
-          ) {
-            break;
-          }
+          if (statusData.status === "COMPLETED" || statusData.status === "FAILED") break;
         }
         await new Promise((r) => setTimeout(r, 3000));
       }
     }
-
     setLoading(false);
     router.refresh();
   }
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={handleRun}
-      disabled={loading || demoMode}
-      title={demoMode ? "Demo mode — read only" : undefined}
-    >
+    <Button type="button" variant="outline" size="sm" onClick={handleRun} disabled={loading || demoMode}>
       {loading ? "Running..." : "Run Agent"}
     </Button>
   );
