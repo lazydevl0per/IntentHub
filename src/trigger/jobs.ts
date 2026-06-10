@@ -282,3 +282,19 @@ export const executeAgentRunTask = task({
     return { agentRunId: run.id, status: run.status };
   },
 });
+
+export type ObjectiveWorkflowStepPayload = {
+  workflowId: string;
+  step: "generate-plans" | "continue-after-plan-approval" | "continue-after-agent-complete";
+};
+
+export const runObjectiveWorkflowStepTask = task({
+  id: "run-objective-workflow-step",
+  run: async (payload: ObjectiveWorkflowStepPayload) => {
+    const { runObjectiveWorkflowStep } = await import(
+      "@/lib/ai/objective-workflow"
+    );
+    await runObjectiveWorkflowStep(payload.workflowId, payload.step);
+    return { workflowId: payload.workflowId, step: payload.step };
+  },
+});

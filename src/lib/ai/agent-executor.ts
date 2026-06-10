@@ -252,6 +252,18 @@ export async function executeAgentRun(agentRunId: string) {
 
     await indexAgentRun(agentRunId);
 
+    try {
+      const { resumeWorkflowForAgentRun } = await import(
+        "@/lib/ai/objective-workflow"
+      );
+      await resumeWorkflowForAgentRun(agentRunId);
+    } catch (error) {
+      console.error("[workflow] resume after agent complete failed", {
+        agentRunId,
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+
     return updated;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent run failed";
@@ -265,6 +277,21 @@ export async function executeAgentRun(agentRunId: string) {
         output: "",
       },
     });
+
+    try {
+      const { resumeWorkflowForAgentRun } = await import(
+        "@/lib/ai/objective-workflow"
+      );
+      await resumeWorkflowForAgentRun(agentRunId);
+    } catch (workflowError) {
+      console.error("[workflow] resume after agent failure failed", {
+        agentRunId,
+        error:
+          workflowError instanceof Error
+            ? workflowError.message
+            : workflowError,
+      });
+    }
 
     throw error;
   }

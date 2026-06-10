@@ -11,7 +11,9 @@ import {
   indexEntityTask,
   reindexRepositoryTask,
   runIndexEntity,
+  runObjectiveWorkflowStepTask,
   syncRepositoryTask,
+  type ObjectiveWorkflowStepPayload,
 } from "@/trigger/jobs";
 import { syncRepository } from "@/lib/github";
 import {
@@ -266,5 +268,25 @@ export async function enqueueExecuteAgentRun(agentRunId: string) {
 
   const { executeAgentRun } = await import("@/lib/ai/agent-executor");
   await executeAgentRun(agentRunId);
+  return null;
+}
+
+export async function enqueueObjectiveWorkflowStep(
+  workflowId: string,
+  step: ObjectiveWorkflowStepPayload["step"]
+) {
+  const payload: ObjectiveWorkflowStepPayload = { workflowId, step };
+
+  if (isTriggerConfigured()) {
+    return tasks.trigger<typeof runObjectiveWorkflowStepTask>(
+      "run-objective-workflow-step",
+      payload
+    );
+  }
+
+  const { runObjectiveWorkflowStep } = await import(
+    "@/lib/ai/objective-workflow"
+  );
+  await runObjectiveWorkflowStep(workflowId, step);
   return null;
 }
