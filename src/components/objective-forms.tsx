@@ -377,14 +377,20 @@ export function CreateDecisionForm({
         </SelectContent>
       </Select>
       <Textarea placeholder="Rationale" value={rationale} onChange={(e) => setRationale(e.target.value)} required />
-      <Select value={linkedCommitSha} onValueChange={setLinkedCommitSha}>
+      <Select
+        value={linkedCommitSha || "__none__"}
+        onValueChange={(value) =>
+          setLinkedCommitSha(value === "__none__" ? "" : value)
+        }
+      >
         <SelectTrigger>
           <SelectValue placeholder="Link commit (optional)" />
         </SelectTrigger>
         <SelectContent>
+          <SelectItem value="__none__">No linked commit</SelectItem>
           {commits.map((commit) => (
             <SelectItem key={commit.sha} value={commit.sha}>
-              {commit.sha.slice(0, 7)} — {commit.message.slice(0, 40)}
+              {commit.sha.slice(0, 7)} — {commit.message.split("\n")[0].slice(0, 60)}
             </SelectItem>
           ))}
         </SelectContent>
