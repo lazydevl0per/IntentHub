@@ -1,10 +1,14 @@
 import bcrypt from "bcryptjs";
 import { demoReadonly } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { rateLimitedResponse } from "@/lib/rate-limit";
 import { registerSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
+  const limited = await rateLimitedResponse(request, "register", 5, 60_000);
+  if (limited) return limited;
+
   const readonly = demoReadonly();
   if (readonly) return readonly;
 

@@ -3,15 +3,21 @@ import {
   getSessionUser,
   notFound,
   requireRepoAccess,
+  serverError,
   unauthorized,
 } from "@/lib/api";
 import { enqueueReindexRepository } from "@/lib/jobs";
+import { logger } from "@/lib/logger";
+import { rateLimitedResponse } from "@/lib/rate-limit";
 import { NextResponse } from "next/server";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const limited = await rateLimitedResponse(request, "reindex", 5, 60_000);
+  if (limited) return limited;
+
   const readonly = demoReadonly();
   if (readonly) return readonly;
 
@@ -23,7 +29,7 @@ export async function POST(
   if (!member) return notFound();
 
   if (member.role !== "OWNER") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 });
   }
 
   try {
@@ -38,11 +44,10 @@ export async function POST(
       { status: handle ? 202 : 200 }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Reindex failed";
-    console.error("[reindex] repository reindex failed", {
+    logger.error("repository reindex failed", {
       repositoryId: id,
-      error: message,
+      error: error instanceof Error ? error.message : error,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError("Reindex failed", error);
   }
 }

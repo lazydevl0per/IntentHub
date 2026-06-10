@@ -3,16 +3,23 @@ import {
   getSessionUser,
   notFound,
   requireRepoAccess,
+  serverError,
   unauthorized,
 } from "@/lib/api";
 import { enqueueSyncRepository } from "@/lib/jobs";
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { rateLimitedResponse } from "@/lib/rate-limit";
+import { omitWebhookSecret } from "@/lib/repository-serializer";
 import { NextResponse } from "next/server";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const limited = await rateLimitedResponse(request, "sync", 10, 60_000);
+  if (limited) return limited;
+
   const readonly = demoReadonly();
   if (readonly) return readonly;
 
@@ -29,10 +36,12 @@ export async function POST(
       where: { id },
     });
 
+    if (!repository) return notFound();
+
     if (handle) {
       return NextResponse.json(
         {
-          ...repository,
+          ...omitWebhookSecret(repository),
           syncStatus: "queued" as const,
           runId: handle.id,
         },
@@ -41,15 +50,14 @@ export async function POST(
     }
 
     return NextResponse.json({
-      ...repository,
+      ...omitWebhookSecret(repository),
       syncStatus: "success" as const,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Sync failed";
-    console.error("[sync] manual sync enqueue failed", {
+    logger.error("manual sync enqueue failed", {
       repositoryId: id,
-      error: message,
+      error: error instanceof Error ? error.message : error,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError("Sync failed", error);
   }
 }

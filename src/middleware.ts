@@ -3,6 +3,16 @@ import authConfig from "@/auth.config";
 import { NextResponse } from "next/server";
 
 export default NextAuth(authConfig).auth((req) => {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.DEMO_MODE === "true"
+  ) {
+    return NextResponse.json(
+      { error: "Demo mode is not allowed in production" },
+      { status: 503 }
+    );
+  }
+
   if (process.env.DEMO_MODE === "true") {
     return NextResponse.next();
   }
@@ -14,9 +24,14 @@ export default NextAuth(authConfig).auth((req) => {
   const isApiAuth = req.nextUrl.pathname.startsWith("/api/auth");
   const isWebhook = req.nextUrl.pathname.startsWith("/api/webhooks");
   const isHealth = req.nextUrl.pathname === "/api/health";
+  const isApi = req.nextUrl.pathname.startsWith("/api/");
 
   if (isApiAuth || isWebhook || isHealth) {
     return NextResponse.next();
+  }
+
+  if (isApi && !isLoggedIn) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (!isLoggedIn && !isAuthPage) {

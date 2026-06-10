@@ -32,6 +32,16 @@ export type RepositoryPageData = {
     perfImpact: string | null;
     testStatus: string | null;
   }>;
+  pullRequests: Array<{
+    id: string;
+    number: number;
+    title: string;
+    state: string;
+    headBranch: string;
+    baseBranch: string;
+    htmlUrl: string;
+    mergedAt: Date | null;
+  }>;
 };
 
 export type RepositorySettingsData = {
@@ -83,10 +93,17 @@ export async function getRepositoryPageData(
       branches: {
         orderBy: { name: "asc" },
       },
+      pullRequests: {
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+      },
     },
   });
 
-  return repository as RepositoryPageData | null;
+  if (!repository) return null;
+
+  const { webhookSecret: _, ...safe } = repository;
+  return safe as RepositoryPageData;
 }
 
 export async function getRepositorySettingsData(
@@ -116,5 +133,9 @@ export async function getRepositorySettingsData(
 
   if (!repository) return null;
 
-  return { repository, member } as unknown as RepositorySettingsData;
+  const { webhookSecret: _, ...safeRepository } = repository;
+  return {
+    repository: safeRepository,
+    member,
+  } as unknown as RepositorySettingsData;
 }

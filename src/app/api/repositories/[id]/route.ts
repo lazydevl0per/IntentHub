@@ -3,11 +3,13 @@ import {
   demoReadonly,
   getSessionUser,
   notFound,
+  parseJsonBody,
   requireRepoAccess,
   unauthorized,
 } from "@/lib/api";
 import { deleteRepositoryWebhook } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
+import { omitWebhookSecret } from "@/lib/repository-serializer";
 import { repositorySettingsSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
 
@@ -44,7 +46,9 @@ export async function GET(
     },
   });
 
-  return NextResponse.json(repository);
+  if (!repository) return notFound();
+
+  return NextResponse.json(omitWebhookSecret(repository));
 }
 
 export async function PATCH(
@@ -62,10 +66,12 @@ export async function PATCH(
   if (!member) return notFound();
 
   if (member.role !== "OWNER") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 });
   }
 
-  const body = await request.json();
+  const { data: body, error: parseError } = await parseJsonBody(request);
+  if (parseError) return parseError;
+
   const parsed = repositorySettingsSchema.safeParse(body);
   if (!parsed.success) {
     return badRequest("Invalid repository settings");
@@ -76,7 +82,7 @@ export async function PATCH(
     data: parsed.data,
   });
 
-  return NextResponse.json(repository);
+  return NextResponse.json(omitWebhookSecret(repository));
 }
 
 export async function DELETE(

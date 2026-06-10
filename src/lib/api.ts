@@ -1,4 +1,5 @@
 import { isDemoMode } from "@/lib/demo";
+import { logger } from "@/lib/logger";
 import {
   getDemoObjectiveAccess,
   getDemoRepositoryMember,
@@ -32,6 +33,36 @@ export function badRequest(message: string) {
 
 export function notFound(message = "Not found") {
   return NextResponse.json({ error: message }, { status: 404 });
+}
+
+export function forbidden(message = "Forbidden") {
+  return NextResponse.json({ error: message, code: "FORBIDDEN" }, { status: 403 });
+}
+
+export function serverError(
+  publicMessage: string,
+  internalError?: unknown
+) {
+  if (internalError) {
+    logger.error(publicMessage, {
+      error:
+        internalError instanceof Error
+          ? internalError.message
+          : String(internalError),
+    });
+  }
+  return NextResponse.json(
+    { error: publicMessage, code: "INTERNAL_ERROR" },
+    { status: 500 }
+  );
+}
+
+export async function parseJsonBody<T>(request: Request) {
+  try {
+    return { data: (await request.json()) as T, error: null };
+  } catch {
+    return { data: null, error: badRequest("Invalid JSON body") };
+  }
 }
 
 export async function requireRepoAccess(repositoryId: string, userId: string) {

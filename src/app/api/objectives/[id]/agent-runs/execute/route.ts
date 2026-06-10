@@ -3,7 +3,9 @@ import {
   demoReadonly,
   getSessionUser,
   notFound,
+  parseJsonBody,
   requireObjectiveAccess,
+  serverError,
   unauthorized,
 } from "@/lib/api";
 import {
@@ -11,7 +13,9 @@ import {
   buildAgentPrompt,
 } from "@/lib/ai/agent-executor";
 import { enqueueExecuteAgentRun } from "@/lib/jobs";
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { rateLimitedResponse } from "@/lib/rate-limit";
 import { executeAgentRunSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
 
@@ -19,6 +23,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const limited = await rateLimitedResponse(request, "agent-execute", 5, 60_000);
+  if (limited) return limited;
+
   const readonly = demoReadonly();
   if (readonly) return readonly;
 
@@ -29,7 +36,9 @@ export async function POST(
   const access = await requireObjectiveAccess(id, user.id);
   if (!access) return notFound();
 
-  const body = await request.json();
+  const { data: body, error: parseError } = await parseJsonBody(request);
+  if (parseError) return parseError;
+
   const parsed = executeAgentRunSchema.safeParse(body);
   if (!parsed.success) {
     return badRequest("Invalid agent execution request");
@@ -92,17 +101,19 @@ export async function POST(
       { status: handle ? 202 : 200 }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to start agent run";
+    logger.error("agent run enqueue failed", {
+      agentRunId: agentRun.id,
+      error: error instanceof Error ? error.message : error,
+    });
 
     await prisma.agentRun.update({
       where: { id: agentRun.id },
       data: {
         status: "FAILED",
-        errorMessage: message,
+        errorMessage: "Failed to start agent run",
       },
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError("Failed to start agent run", error);
   }
 }

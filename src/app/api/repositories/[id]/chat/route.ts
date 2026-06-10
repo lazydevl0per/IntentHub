@@ -2,9 +2,12 @@ import {
   demoReadonly,
   getSessionUser,
   notFound,
+  parseJsonBody,
   requireRepoAccess,
   unauthorized,
 } from "@/lib/api";
+import { logger } from "@/lib/logger";
+import { rateLimitedResponse } from "@/lib/rate-limit";
 import { streamRepositoryChatWithCitations } from "@/lib/ai/rag";
 import { getDemoChatSessions } from "@/lib/demo/fixtures";
 import { isDemoMode } from "@/lib/demo";
@@ -43,6 +46,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const limited = await rateLimitedResponse(request, "chat", 30, 60_000);
+  if (limited) return limited;
+
   const readonly = demoReadonly();
   if (readonly) return readonly;
 
@@ -53,7 +59,9 @@ export async function POST(
   const member = await requireRepoAccess(id, user.id);
   if (!member) return notFound();
 
-  const body = await request.json();
+  const { data: body, error: parseError } = await parseJsonBody(request);
+  if (parseError) return parseError;
+
   const parsed = chatSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid chat message" }, { status: 400 });
@@ -137,9 +145,11 @@ export async function POST(
           data: { updatedAt: new Date() },
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Chat failed";
-        controller.enqueue(encoder.encode(message));
+        logger.error("chat stream failed", {
+          repositoryId: id,
+          error: error instanceof Error ? error.message : error,
+        });
+        controller.enqueue(encoder.encode("Chat failed. Please try again."));
       } finally {
         controller.close();
       }

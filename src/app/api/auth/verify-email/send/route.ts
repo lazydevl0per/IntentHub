@@ -27,8 +27,6 @@ export async function POST() {
 
   return NextResponse.json({
     sent: true,
-    verifyUrl: `/api/auth/verify-email/confirm?token=${token}`,
-    message:
-      "Verification token created. In production, this would be emailed to the user.",
+    message: "Verification email sent if mail delivery is configured.",
   });
 }

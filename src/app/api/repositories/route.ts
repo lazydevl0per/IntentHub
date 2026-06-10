@@ -1,12 +1,20 @@
 import {
   badRequest,
   demoReadonly,
+  forbidden,
   getSessionUser,
+  parseJsonBody,
   unauthorized,
 } from "@/lib/api";
-import { registerRepositoryWebhook } from "@/lib/github";
+import { registerRepositoryWebhook, verifyUserOwnsRepository } from "@/lib/github";
 import { enqueueSyncRepository } from "@/lib/jobs";
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { rateLimitedResponse } from "@/lib/rate-limit";
+import {
+  omitWebhookSecret,
+  omitWebhookSecretFromList,
+} from "@/lib/repository-serializer";
 import { connectRepoSchema } from "@/lib/validations";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
@@ -32,20 +40,30 @@ export async function GET() {
     orderBy: { updatedAt: "desc" },
   });
 
-  return NextResponse.json(repositories);
+  return NextResponse.json(omitWebhookSecretFromList(repositories));
 }
 
 export async function POST(request: Request) {
+  const limited = await rateLimitedResponse(request, "repo-connect", 10, 60_000);
+  if (limited) return limited;
+
   const readonly = demoReadonly();
   if (readonly) return readonly;
 
   const user = await getSessionUser();
   if (!user) return unauthorized();
 
-  const body = await request.json();
+  const { data: body, error: parseError } = await parseJsonBody(request);
+  if (parseError) return parseError;
+
   const parsed = connectRepoSchema.safeParse(body);
   if (!parsed.success) {
     return badRequest("Invalid repository data");
+  }
+
+  const ownsRepo = await verifyUserOwnsRepository(user.id, parsed.data.githubId);
+  if (!ownsRepo) {
+    return forbidden("You do not have access to this GitHub repository");
   }
 
   const existing = await prisma.repository.findUnique({
@@ -59,7 +77,7 @@ export async function POST(request: Request) {
 
   if (existing) {
     if (existing.members.length > 0) {
-      return NextResponse.json(existing);
+      return NextResponse.json(omitWebhookSecret(existing));
     }
 
     await prisma.repositoryMember.create({
@@ -70,7 +88,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(existing);
+    return NextResponse.json(omitWebhookSecret(existing));
   }
 
   const webhookSecret = crypto.randomBytes(32).toString("hex");
@@ -102,10 +120,10 @@ export async function POST(request: Request) {
     webhookStatus = "success";
   } catch (error) {
     webhookStatus = "failed";
-    webhookError = error instanceof Error ? error.message : "Webhook registration failed";
-    console.error("[webhook] repository connect registration failed", {
+    webhookError = "Webhook registration failed";
+    logger.error("repository connect webhook registration failed", {
       repositoryId: repository.id,
-      error: webhookError,
+      error: error instanceof Error ? error.message : error,
     });
   }
 
@@ -114,10 +132,10 @@ export async function POST(request: Request) {
     syncStatus = handle ? "queued" : "success";
   } catch (error) {
     syncStatus = "failed";
-    syncError = error instanceof Error ? error.message : "Sync failed";
-    console.error("[sync] repository connect enqueue failed", {
+    syncError = "Sync failed";
+    logger.error("repository connect sync enqueue failed", {
       repositoryId: repository.id,
-      error: syncError,
+      error: error instanceof Error ? error.message : error,
     });
   }
 
@@ -134,7 +152,13 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(
-    { ...refreshed, syncStatus, syncError, webhookStatus, webhookError },
+    {
+      ...omitWebhookSecret(refreshed!),
+      syncStatus,
+      syncError,
+      webhookStatus,
+      webhookError,
+    },
     { status: 201 }
   );
 }

@@ -1,19 +1,25 @@
+import { badRequest } from "@/lib/api";
 import { verifyGitHubWebhook } from "@/lib/github";
 import { enqueueGitHubWebhook } from "@/lib/jobs";
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { rateLimitedResponse } from "@/lib/rate-limit";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
+  const limited = await rateLimitedResponse(request, "github-webhook", 120, 60_000);
+  if (limited) return limited;
+
   const payload = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
   const event = request.headers.get("x-github-event");
   const delivery = request.headers.get("x-github-delivery");
 
   if (!event) {
-    return NextResponse.json({ error: "Missing event header" }, { status: 400 });
+    return badRequest("Missing event header");
   }
 
-  const data = JSON.parse(payload) as {
+  let data: {
     repository?: { id: number };
     ref?: string;
     ref_type?: string;
@@ -45,8 +51,14 @@ export async function POST(request: Request) {
     };
   };
 
+  try {
+    data = JSON.parse(payload);
+  } catch {
+    return badRequest("Invalid JSON payload");
+  }
+
   if (!data.repository?.id) {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    return badRequest("Invalid payload");
   }
 
   const repository = await prisma.repository.findUnique({
@@ -167,6 +179,8 @@ export async function POST(request: Request) {
       { status: handle ? 202 : 200 }
     );
   }
+
+  logger.info("github webhook ignored", { event, delivery });
 
   return NextResponse.json({
     ok: true,

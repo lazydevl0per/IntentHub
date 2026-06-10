@@ -18,6 +18,24 @@ export function createOctokit(token: string) {
   return new Octokit({ auth: token });
 }
 
+export async function verifyUserOwnsRepository(
+  userId: string,
+  githubId: number
+) {
+  const token = await getUserGitHubToken(userId);
+  if (!token) {
+    return false;
+  }
+
+  const octokit = createOctokit(token);
+  const { data } = await octokit.repos.listForAuthenticatedUser({
+    per_page: 100,
+    sort: "updated",
+  });
+
+  return data.some((repo) => repo.id === githubId);
+}
+
 export async function listUserRepositories(userId: string) {
   const token = await getUserGitHubToken(userId);
   if (!token) {
@@ -510,7 +528,7 @@ export async function syncPullRequests(repositoryId: string) {
         })
       : null;
 
-    const state = pull.merged
+    const state = pull.merged_at
       ? PullRequestState.MERGED
       : pull.state === "open"
         ? PullRequestState.OPEN
@@ -548,7 +566,7 @@ export async function syncPullRequests(repositoryId: string) {
       },
     });
 
-    if (pull.merged && pull.merge_commit_sha) {
+    if (pull.merged_at && pull.merge_commit_sha) {
       await prisma.deployment.upsert({
         where: {
           id: `${repositoryId}-${pull.number}`,
@@ -644,7 +662,7 @@ export async function handlePullRequestWebhook(
     : null;
 
   const state =
-    pull.merged || (payload.action === "closed" && Boolean(pull.merge_commit_sha))
+    pull.merged_at || (payload.action === "closed" && Boolean(pull.merge_commit_sha))
       ? PullRequestState.MERGED
       : pull.state === "open"
         ? PullRequestState.OPEN
@@ -680,7 +698,7 @@ export async function handlePullRequestWebhook(
     },
   });
 
-  if (pull.merged && pull.merge_commit_sha) {
+  if (pull.merged_at && pull.merge_commit_sha) {
     await prisma.deployment.upsert({
       where: { id: `${repositoryId}-${pull.number}` },
       create: {
